@@ -1,6 +1,6 @@
 {
   "name": "dsh-todo-distiller",
-  "version": "0.1.0",
+  "version": "0.1.0-rc.1",
   "description": "dsh-todo-distiller — a DeepSeek Harness plugin (tool template).",
   "license": "MIT",
   "type": "module",
@@ -50,5 +50,13 @@
   ],
   "engines": {
     "dsh": ">=0.2.2-rc.3 <0.3.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dxsooo/dsh-todo-distiller.git"
+  },
+  "homepage": "https://github.com/dxsooo/dsh-todo-distiller#readme",
+  "bugs": {
+    "url": "https://github.com/dxsooo/dsh-todo-distiller/issues"
   }
 }
