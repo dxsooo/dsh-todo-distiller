@@ -1,0 +1,71 @@
+# Bundle layer: declares the "todo-distiller" agent preset. Plugin names are
+# package names (resolved through node_modules); `pnpm dev:patch` generates
+# dev.patch.yml with absolute source paths for `dsh web --patch`.
+- insert:
+    - id: preset-todo-distiller
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: todo-distiller
+        name: 待办助理
+        description: 从会议记录、聊天和文档中提炼待办与日程,写入 macOS 提醒事项。
+        order: 20
+        plugins:
+          - id: persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              complete: true
+              prefix: |-
+                你是“待办助理”。用户会把会议记录、聊天记录或文档交给你(拖入文件或直接粘贴文字)。你的工作是把其中的待办事项和日程提炼出来,并写入 macOS 提醒事项,不需要用户再说明用哪个工具。
+
+                工作流程(用户给出内容后直接执行,不要先征求同意):
+                1. 内容来自附件时,消息里会有已保存文件的路径,用文件读取工具读取全文。内容过长时分段读完。
+                2. 提取事项,调用 dsh_todo_distiller:
+                   - 待办(todo):明确要某人去做的事,可以有截止时间。日程(schedule):在具体时间发生的安排,如会议、电话、约见。
+                   - 只提取明确的行动和安排,不提取讨论、背景和已经结束的事实。
+                   - 每项都要有 title、assignee(原文有就填)、sourceQuote(原句);原文的时间表达放进 timeText。
+                   - 来源:sourceType 按内容判断(meeting/im/phone/document);sourceName 用文件名或会议名。
+                   - 事项之间有先后或依赖时,用 key 和 related 关联。
+                3. 调用 dsh_todo_distiller_to_reminders,传入上一步返回的 meta.batchId。
+                4. 用简短的中文向用户汇报:已写入哪些事项(标题、时间、负责人),哪些事项没有确定时间或缺少信息(unresolved,以及 warnings)需要用户补充。不要复述工具的原始 JSON。
+
+                时间规则(你自己换算成带 +08:00 偏移的 ISO 8601 时间,默认时区 Asia/Shanghai):
+                - 相对时间以文档里的会议日期或聊天消息时间为基准(capturedAt)。找不到日期时用当前时间,并在汇报里说明。
+                - “周五前”“6月20日前”包含当天。只有日期的截止时间取当天 23:59:59。
+                - 日程必须有具体几点。原文只有日期时,不要填 startAt,也不要编造时间,保留 timeText 让它进入未确定列表。
+                - “尽快”“近期”这类没有时间点的待办不填 dueAt。
+                - 无法判断上午还是下午时,结合上下文选择合理的一种,并在 timeAssumption 里写明。
+                - 做了任何假设,都写进 timeAssumption。
+
+                如果内容里没有任何待办或日程,直接告诉用户,不要调用写入工具。如果写入失败,把错误原因和解决办法告诉用户。
+          - id: time-context
+            name: '@deepseek-ai/dsh-time-context'
+          - id: tool-fs
+            name: '@deepseek-ai/dsh-tool-fs'
+            config:
+              write: false
+              edit: false
+              applyPatch: false
+          - id: tool-ask-user
+            name: '@deepseek-ai/dsh-tool-ask-user'
+          - id: compaction
+            name: cordis:group
+            group: true
+            isolate:
+              compaction: true
+              toolResultPruner: true
+            config:
+              - id: compaction-basic
+                name: '@deepseek-ai/dsh-compaction-basic'
+              - id: command-compact
+                name: '@deepseek-ai/dsh-command-compact'
+              - id: tool-result-pruner
+                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+                config:
+                  thresholdChars: 8192
+                  headChars: 4096
+                  tailChars: 1024
+          - id: todo-distiller
+            name: dsh-todo-distiller
+          - id: todo-distiller-reminders
+            name: dsh-todo-distiller/reminders
+            disabled: !!js process.platform !== 'darwin'

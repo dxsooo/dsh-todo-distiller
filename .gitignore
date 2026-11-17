@@ -1,0 +1,5 @@
+node_modules/
+dist/
+dev.patch.yml
+*.tgz
+.DS_Store
