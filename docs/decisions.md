@@ -53,7 +53,7 @@
 
 ## 10. 一个 npm 包,两个插件,一个 preset
 
-安装单位是 bundle(npm 包),不是插件。`dsh-todo-distiller` 包含提炼插件、提醒事项插件和 `todo-distiller` preset 声明。用户装一次,在界面里选择该 preset。第二个插件通过子路径 `dsh-todo-distiller/reminders` 引用(`package.json` 的 `exports`)。
+安装单位是 bundle(npm 包),不是插件。`@dxsooo/dsh-todo-distiller` 包含提炼插件、提醒事项插件和 `todo-distiller` preset 声明。用户装一次,在界面里选择该 preset。第二个插件通过子路径 `@dxsooo/dsh-todo-distiller/reminders` 引用(`package.json` 的 `exports`)。
 
 ## 11. 写入 macOS 用 JXA,经 `ctx.subprocess` 调用 `osascript`
 
@@ -72,3 +72,11 @@
 ## 14. 流程写在 persona,不写在代码
 
 "读文件 → 提炼 → 写入 → 汇报"、时间规则和 `timeAssumption` 约定都在 preset 的 persona 提示词里(`cordis.patch.yml`)。改流程不需要改代码。
+
+## 15. npm 包名使用作用域 `@dxsooo/dsh-todo-distiller`
+
+与 GitHub 账号 `dxsooo` 对齐,不占用全局短名,以后的配套包(如录音入口)可放在同一作用域下。作用域不影响可见性,包仍然是公开的。
+
+最初以无作用域名 `dsh-todo-distiller@0.1.0-rc.1` 发布过一次,随后改名并对旧包执行 `npm deprecate`(npm 官方建议用弃用代替删除)。
+
+不变的内部标识:插件的 `name`(`dsh-todo-distiller`、`dsh-todo-distiller-reminders`)、工具名、preset id、提醒事项备注里的幂等标记前缀 `dsh-todo-distiller:`。它们与 npm 包名无关,改动会影响会话日志和已写入事项的去重。

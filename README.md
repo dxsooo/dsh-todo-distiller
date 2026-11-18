@@ -7,7 +7,7 @@ DeepSeek Harness 的“待办助理”bundle。把会议记录、聊天记录、
 要求:DeepSeek Harness `>=0.2.2-rc.3 <0.3.0`;写入提醒事项仅 macOS 可用。
 
 ```sh
-dsh plugin --profile web add dsh-todo-distiller
+dsh plugin --profile web add @dxsooo/dsh-todo-distiller@next
 ```
 
 1. 启动 DSH 的 Web 界面,新建对话,选择 preset“待办助理”。也可以在设置里把它设为新任务的默认 preset。

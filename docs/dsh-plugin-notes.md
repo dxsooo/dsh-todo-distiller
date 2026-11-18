@@ -95,7 +95,7 @@ pnpm dsh web --patch ./scratch-plugin/cordis.yml
 ```yaml
 - insert:
     - id: dsh-todo-distiller
-      name: dsh-todo-distiller
+      name: '@dxsooo/dsh-todo-distiller'
 ```
 
 用户用 `dsh plugin add` 安装后,该层随 profile 生效。本阶段不使用。

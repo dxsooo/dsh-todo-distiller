@@ -65,7 +65,7 @@
                   headChars: 4096
                   tailChars: 1024
           - id: todo-distiller
-            name: dsh-todo-distiller
+            name: '@dxsooo/dsh-todo-distiller'
           - id: todo-distiller-reminders
-            name: dsh-todo-distiller/reminders
+            name: '@dxsooo/dsh-todo-distiller/reminders'
             disabled: !!js process.platform !== 'darwin'

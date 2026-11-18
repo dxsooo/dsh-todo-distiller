@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const text = readFileSync(join(root, 'cordis.patch.yml'), 'utf8')
 const dev = text
-  .replace(/name: dsh-todo-distiller\/reminders$/gm, `name: '${join(root, 'src/reminders.ts')}'`)
-  .replace(/name: dsh-todo-distiller$/gm, `name: '${join(root, 'src/index.ts')}'`)
+  .replace(/name: '@dxsooo\/dsh-todo-distiller\/reminders'$/gm, `name: '${join(root, 'src/reminders.ts')}'`)
+  .replace(/name: '@dxsooo\/dsh-todo-distiller'$/gm, `name: '${join(root, 'src/index.ts')}'`)
 writeFileSync(join(root, 'dev.patch.yml'), dev)
 console.log(`wrote ${join(root, 'dev.patch.yml')}`)

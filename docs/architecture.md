@@ -19,10 +19,10 @@
 
 ## 交付形态
 
-用户安装一个 npm 包 `dsh-todo-distiller`(一个 bundle),包内有两个 DSH 插件和一个 preset 声明:
+用户安装一个 npm 包 `@dxsooo/dsh-todo-distiller`(一个 bundle),包内有两个 DSH 插件和一个 preset 声明:
 
 ```
-bundle dsh-todo-distiller
+bundle @dxsooo/dsh-todo-distiller
   └─ preset todo-distiller(显示名"待办助理")      cordis.patch.yml
        ├─ persona                    系统提示词:拖入文件后自动 读取 → 提炼 → 写入 → 汇报
        ├─ time-context、tool-fs、tool-ask-user    DSH 自带
