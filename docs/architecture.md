@@ -19,32 +19,39 @@
 
 ## 交付形态
 
-用户安装一个 npm 包 `@dxsooo/dsh-todo-distiller`(一个 bundle),包内有两个 DSH 插件和一个 preset 声明:
+用户安装一个 npm 包 `@dxsooo/dsh-todo-distiller`(一个 bundle)。`cordis.patch.yml` 插入包本身一行;包的 Host 入口是 `src/app.ts`,`./client` 导出浏览器模块。
 
 ```
 bundle @dxsooo/dsh-todo-distiller
-  └─ preset todo-distiller(显示名"待办助理")      cordis.patch.yml
-       ├─ persona                    系统提示词:拖入文件后自动 读取 → 提炼 → 写入 → 汇报
-       ├─ time-context、tool-fs、tool-ask-user    DSH 自带
-       ├─ 插件 distiller      src/index.ts       工具 dsh_todo_distiller
-       └─ 插件 reminders      src/reminders.ts   工具 dsh_todo_distiller_to_reminders(仅 macOS)
+  ├─ Host 插件 src/app.ts     路由 /todo-distiller/*、事项库、每日会话(src/runner.ts)
+  │    └─ 每日会话(专用工作区"待办助理")
+  │         ├─ 系统提示词 src/prompt.ts
+  │         ├─ 工具 dsh_todo_distiller          src/index.ts
+  │         └─ 工具 dsh_todo_distiller_to_reminders  src/reminders.ts(仅 macOS)
+  └─ 浏览器模块 dist/client.js(src/client)   侧栏入口"待办助理"和投放页
 ```
 
-用户在界面里选择"待办助理"preset 后,把文件拖进对话框即可,不需要说明用哪个工具。流程写在 persona 里,不是代码。
+用户点开侧栏的"待办助理",把文件拖进页面即可,不需要发送,也不需要说明用哪个工具。页面流程、每日会话和事项库见 [page.md](page.md)。
 
 ## 模块
 
 | 文件 | 职责 |
 |---|---|
-| `src/index.ts` | 插件 distiller。定义 `dsh_todo_distiller` 的参数和输出 schema;`execute` 校验、归一化并保存批次 |
+| `src/app.ts` | Host 插件入口:打开事项库、创建 `Runner`、注册路由 |
+| `src/runner.ts` | 串行队列、每日会话(新建 / 恢复)、已有事项索引 |
+| `src/store.ts` | 事项库(`ctx.storageDomain`)、事项投影、索引选择与渲染 |
+| `src/prompt.ts` | 每日会话的系统提示词 |
+| `src/index.ts` | `dsh_todo_distiller` 的 schema 和注册函数 |
 | `src/distill.ts` | 纯函数。`validate` 检查输入,`distill` 生成输出和提醒建议 |
+| `src/item-id.ts` | 事项稳定 id(也是提醒事项去重标记) |
 | `src/time.ts` | 时区换算、ISO 8601 解析、格式化、周几。只用 `Intl` |
-| `src/batches.ts` | 内存中的批次存储(最多 50 个)。两个插件共用,工具之间只传 `batchId` |
-| `src/reminders.ts` | 插件 reminders。定义 `dsh_todo_distiller_to_reminders`,用 `ctx.subprocess` 调用 `osascript` |
-| `src/publish.ts` | 纯函数。把批次映射成提醒事项字段,生成幂等标记 |
+| `src/batches.ts` | 内存中的批次存储(最多 50 个)。两个工具之间只传 `batchId` |
+| `src/reminders.ts` | `dsh_todo_distiller_to_reminders`,用 `ctx.subprocess` 调用 `osascript` |
+| `src/publish.ts` | 纯函数。把批次映射成提醒事项字段 |
 | `src/macos/reminders-script.ts` | JXA 脚本、`osascript` 参数构造、输出和错误解析 |
-| `cordis.patch.yml` | bundle 层:声明 `todo-distiller` preset |
-| `scripts/make-dev-patch.mjs` | 生成 `dev.patch.yml`(把包名换成源码绝对路径,供 `--patch` 调试) |
+| `src/client/` | 浏览器模块,由 `scripts/build-client.mjs` 打包 |
+| `cordis.patch.yml` | bundle 层:插入包本身 |
+| `scripts/make-dev-patch.mjs` | 生成 `dev.patch.yml`(包名换成源码绝对路径,供 `--patch` 调试) |
 | `test/` | `node:test` 单元测试 |
 
 ## 工具输入

@@ -75,14 +75,13 @@ pnpm build         # tsc → dist/
 1. 生成调试 patch 并启动(在 DSH 源码目录):
 
    ```sh
-   (cd /path/to/dsh-todo-distiller && pnpm dev:patch)
+   (cd /path/to/dsh-todo-distiller && pnpm build && pnpm dev:patch)
    pnpm dsh web --patch /path/to/dsh-todo-distiller/dev.patch.yml
    ```
 
-   不要同时加载旧的 `scratch-plugin/cordis.yml`,否则 `dsh_todo_distiller` 会被注册两次。
 
-2. 打开 `http://127.0.0.1:3080`,新建会话,选择 preset"待办助理"。
-3. 把 `test/fixtures/项目周会-2025-06-03.md` 拖进对话框并发送,不输入任何指令。
+2. 打开 `http://127.0.0.1:3080`,点侧栏的"待办助理"。
+3. 把 `test/fixtures/项目周会-2025-06-03.md` 拖进页面,不需要发送。
 4. 首次写入时 macOS 会弹出"想要控制提醒事项"的授权框,点"好"。授权对象是启动 DSH 的应用(终端)。
 
 预期:
@@ -95,8 +94,8 @@ pnpm build         # tsc → dist/
 | 联系供应商 | 无截止时间 |
 | 需求冻结 | 6月20日 23:59 |
 | 项目周会 | 6月11日 10:00,备注含 11:30 结束、3号会议室 |
-| 上线评审 | **不**出现在提醒事项,对话里说明缺少具体时间 |
-| 再发一次同一个文件 | 不产生重复项,汇报"已存在" |
+| 上线评审 | **不**出现在提醒事项,卡片里标为未确定 |
+| 再拖一次同一个文件 | 不产生重复项,卡片显示"已存在" |
 
 清理:在提醒事项 app 里删除列表"DSH 助理"。
 
