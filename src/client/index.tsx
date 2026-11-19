@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { DragEvent } from 'react'
 import type { Context } from '@deepseek-ai/cordis'
+import { IconChecklistOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 
 const PANEL_ID = 'todo-distiller'
 const API = 'todo-distiller/'
@@ -42,13 +43,9 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 const timeFormat = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', month: 'numeric', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false })
 const when = (iso: string | null): string => (iso === null ? '' : timeFormat.format(new Date(iso)))
 
-function Icon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
-      <rect x="2.5" y="2.5" width="11" height="11" rx="2" />
-      <path d="M5 6l1.2 1.2L8.5 5M5 10.2l1.2 1.2 2.3-2.2M10 6.3h1.5M10 10.5h1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
+/** Sidebar entry icon: DSH's own checklist glyph at the size the sidebar asks for. */
+function Icon({ size }: { size?: number }) {
+  return <IconChecklistOutlineRegular size={size} />
 }
 
 const muted = { opacity: 0.6 }

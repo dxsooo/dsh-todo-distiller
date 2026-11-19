@@ -8,7 +8,8 @@ import { fileURLToPath } from 'node:url'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const { name } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
-const PLATFORM_MODULES = ['react', 'react/jsx-runtime', 'react-dom', 'react-dom/client', '@deepseek-ai/cordis']
+// Mirrors PLATFORM_MODULES in DSH packages/client/web/src/platform.ts.
+const PLATFORM_MODULES = ['react', 'react/jsx-runtime', 'react-dom', 'react-dom/client', '@deepseek-ai/cordis', '@deepseek-ai/dsh-client-ui-primitives']
 
 const result = await build({
   entryPoints: [join(root, 'src/client/index.tsx')],
