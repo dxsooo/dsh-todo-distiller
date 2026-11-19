@@ -8,6 +8,7 @@ import { defineTool, ToolArgsError } from '@deepseek-ai/dsh-tools'
 import type { ValueSchemaSpec } from '@deepseek-ai/dsh-tools'
 import { saveBatch } from './batches.ts'
 import { distill, validate } from './distill.ts'
+import type { DistillOutput } from './distill.ts'
 import { isValidTimeZone, parseInstant } from './time.ts'
 
 export const name = 'dsh-todo-distiller'
@@ -111,7 +112,17 @@ const unresolvedOut = {
 } as const
 
 export function apply(ctx: Context) {
-  ctx.tools.register(defineTool({
+  registerDistillTool(ctx)
+}
+
+/**
+ * Register `dsh_todo_distiller` in the context's scope (an Agent scope keeps it private to that Agent).
+ * @param ctx - registering context.
+ * @param onResult - called with each successful result and its batch id.
+ * @returns the registration disposer.
+ */
+export function registerDistillTool(ctx: Context, onResult?: (batchId: string, result: DistillOutput) => void): () => void {
+  return ctx.tools.register(defineTool({
     name: 'dsh_todo_distiller',
     description: [
       'Normalize todos and schedule events you extracted from text (chat, call, meeting notes, documents).',
@@ -203,7 +214,9 @@ export function apply(ctx: Context) {
       }
       if (violations.length > 0) throw new ToolArgsError(violations)
       const result = distill(input, capturedMs)
-      return { ...result, meta: { ...result.meta, batchId: saveBatch(result) } }
+      const batchId = saveBatch(result)
+      onResult?.(batchId, result)
+      return { ...result, meta: { ...result.meta, batchId } }
     },
   }))
 }

@@ -64,9 +64,27 @@ async function runOsascript(ctx: Context, argv: string[], timeoutMs: number, sig
   return stdout
 }
 
+export interface RemindersWriteResult {
+  list: string
+  created: number
+  existing: number
+  items: Array<{ id: string, title: string, status: 'created' | 'exists' }>
+}
+
 export function apply(ctx: Context, config: Config) {
   if (process.platform !== 'darwin') return
-  ctx.tools.register(defineTool({
+  registerRemindersTool(ctx, config)
+}
+
+/**
+ * Register `dsh_todo_distiller_to_reminders` in the context's scope. macOS only.
+ * @param ctx - registering context; needs `tools` and `subprocess`.
+ * @param config - Reminders list and timeout.
+ * @param onResult - called with each successful write.
+ * @returns the registration disposer.
+ */
+export function registerRemindersTool(ctx: Context, config: Config, onResult?: (batchId: string, result: RemindersWriteResult) => void): () => void {
+  return ctx.tools.register(defineTool({
     name: 'dsh_todo_distiller_to_reminders',
     description: [
       'Write the todos and schedules of a batch returned by dsh_todo_distiller into the macOS Reminders app.',
@@ -121,12 +139,14 @@ export function apply(ctx: Context, config: Config) {
       }
       const statusOf = new Map(results.map(r => [r.marker, r.status]))
       const items = writes.map(w => ({ id: w.id, title: w.name, status: statusOf.get(w.marker) ?? 'exists' as const }))
-      return {
+      const result = {
         list: config.list,
         created: items.filter(i => i.status === 'created').length,
         existing: items.filter(i => i.status === 'exists').length,
         items,
       }
+      onResult?.(args.batchId, result)
+      return result
     },
   }))
 }

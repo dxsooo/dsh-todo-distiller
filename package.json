@@ -4,10 +4,11 @@
   "description": "DeepSeek Harness bundle: a todo assistant that distills todos and schedules from meeting notes, chats and documents and writes them to macOS Reminders.",
   "license": "MIT",
   "type": "module",
-  "main": "./dist/index.js",
+  "main": "./dist/app.js",
   "exports": {
-    ".": "./dist/index.js",
-    "./reminders": "./dist/reminders.js"
+    ".": "./dist/app.js",
+    "./client": "./dist/client.js",
+    "./package.json": "./package.json"
   },
   "files": [
     "dist",
@@ -16,30 +17,48 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
     }
   },
   "scripts": {
-    "build": "rm -rf dist && tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "rm -rf dist && tsc -p tsconfig.json && node scripts/build-client.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.client.json",
     "test": "node --test test/",
     "dev:patch": "node scripts/make-dev-patch.mjs",
-    "prepublishOnly": "pnpm typecheck && pnpm test && pnpm build"
+    "prepublishOnly": "pnpm typecheck && pnpm test && pnpm build",
+    "build:client": "node scripts/build-client.mjs"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.1.0",
-    "@deepseek-ai/dsh-tools": ">=0.2.2-rc.3 <0.3.0",
+    "@deepseek-ai/dsh-agent": ">=0.2.2-rc.3 <0.3.0",
+    "@deepseek-ai/dsh-agent-default-model": ">=0.2.2-rc.3 <0.3.0",
     "@deepseek-ai/dsh-error": ">=0.2.2-rc.3 <0.3.0",
+    "@deepseek-ai/dsh-host-webserver": ">=0.2.2-rc.3 <0.3.0",
+    "@deepseek-ai/dsh-llm": ">=0.2.2-rc.3 <0.3.0",
+    "@deepseek-ai/dsh-session": ">=0.2.2-rc.3 <0.3.0",
     "@deepseek-ai/dsh-subprocess": ">=0.2.2-rc.3 <0.3.0",
+    "@deepseek-ai/dsh-system-prompt": ">=0.2.2-rc.3 <0.3.0",
+    "@deepseek-ai/dsh-tools": ">=0.2.2-rc.3 <0.3.0",
     "@deepseek-ai/schemastery": "~3.19.0"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.1.0",
-    "@types/node": "^22.10.0",
-    "typescript": "^5.6.0",
-    "@deepseek-ai/dsh-tools": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-agent": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-agent-default-model": "0.2.2-rc.3",
     "@deepseek-ai/dsh-error": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-host-webserver": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-llm": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-session": "0.2.2-rc.3",
     "@deepseek-ai/dsh-subprocess": "0.2.2-rc.3",
-    "@deepseek-ai/schemastery": "~3.19.0"
+    "@deepseek-ai/dsh-system-prompt": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-tools": "0.2.2-rc.3",
+    "@deepseek-ai/schemastery": "~3.19.0",
+    "@types/node": "^22.10.0",
+    "@types/react": "~18.3.31",
+    "esbuild": "^0.25.10",
+    "typescript": "^5.6.0"
   },
   "keywords": [
     "deepseek-harness",
