@@ -29,8 +29,11 @@ export const Config: Schema<Config> = Schema.object({
 const REMINDERS_ERROR_CODES = ['BATCH_NOT_FOUND', 'REMINDERS_NOT_AUTHORIZED', 'REMINDERS_TIMEOUT', 'REMINDERS_FAILED'] as const
 
 export class RemindersError extends HarnessError {
-  constructor(message: string, readonly reminderCode: typeof REMINDERS_ERROR_CODES[number]) {
+  readonly reminderCode: typeof REMINDERS_ERROR_CODES[number]
+
+  constructor(message: string, reminderCode: typeof REMINDERS_ERROR_CODES[number]) {
     super(message, reminderCode)
+    this.reminderCode = reminderCode
     this.name = 'RemindersError'
   }
 }

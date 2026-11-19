@@ -80,3 +80,11 @@
 最初以无作用域名 `dsh-todo-distiller@0.1.0-rc.1` 发布过一次,随后改名并对旧包执行 `npm deprecate`(npm 官方建议用弃用代替删除)。
 
 不变的内部标识:插件的 `name`(`dsh-todo-distiller`、`dsh-todo-distiller-reminders`)、工具名、preset id、提醒事项备注里的幂等标记前缀 `dsh-todo-distiller:`。它们与 npm 包名无关,改动会影响会话日志和已写入事项的去重。
+
+## 16. 专属页面:每天一个会话,事项库用 storageDomain
+
+- 页面模式仍走 DSH 的会话机制(`ctx.agents`),会话挂在专用工作区“待办助理”下,成为普通会话:可在侧栏查看,用量由 DSH 记录。
+- 每天一个会话:当天的文档共用上下文,列表每天只多一条;跨天不共享上下文。
+- 跨天关联不靠压缩或模型写的 memory,而是由代码维护事项库,下一步把未完成事项的索引注入新会话(详见 `page.md`)。
+- 事项库用 DSH 的 `ctx.storageDomain`(默认 JSON 后端,可改配置换 SQLite),不自己处理原子写和多进程。
+- 聊天模式的 preset 已移除。处理完直接写入提醒事项,是否加确认步骤按使用反馈再定。
