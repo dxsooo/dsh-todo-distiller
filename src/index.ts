@@ -39,7 +39,7 @@ const relatedOut = {
   items: {
     type: 'object',
     additionalProperties: false,
-    properties: { id: req(str), relation: req(nullable(str)) },
+    properties: { id: req(str), scope: req({ type: 'string', enum: ['batch', 'store'] }), relation: req(nullable(str)) },
   },
 } as const
 
@@ -48,6 +48,7 @@ const todoOut = {
   additionalProperties: false,
   properties: {
     id: req(str),
+    itemId: req(str),
     title: req(str),
     description: req(nullable(str)),
     assignee: req(nullable(str)),
@@ -69,6 +70,7 @@ const scheduleOut = {
   additionalProperties: false,
   properties: {
     id: req(str),
+    itemId: req(str),
     title: req(str),
     description: req(nullable(str)),
     assignee: req(nullable(str)),
@@ -119,9 +121,14 @@ export function apply(ctx: Context) {
  * Register `dsh_todo_distiller` in the context's scope (an Agent scope keeps it private to that Agent).
  * @param ctx - registering context.
  * @param onResult - called with each successful result and its batch id.
+ * @param isKnownItem - whether a recorded item id exists, for `related.itemId`.
  * @returns the registration disposer.
  */
-export function registerDistillTool(ctx: Context, onResult?: (batchId: string, result: DistillOutput) => void): () => void {
+export function registerDistillTool(
+  ctx: Context,
+  onResult?: (batchId: string, result: DistillOutput) => void,
+  isKnownItem?: (id: string) => boolean,
+): () => void {
   return ctx.tools.register(defineTool({
     name: 'dsh_todo_distiller',
     description: [
@@ -132,6 +139,7 @@ export function registerDistillTool(ctx: Context, onResult?: (batchId: string, r
       'A schedule needs a time of day: if the source gives only a date, omit startAt and keep timeText; never invent a placeholder time.',
       'The tool validates times, returns the weekday for each so you can check your arithmetic, links related items, and suggests reminders.',
       'Omit dueAt/startAt only when the source gives no determinable time.',
+      'Every returned item has a stable itemId. Link a new item to one from an earlier document (listed under 已有事项, or returned by an earlier call) with related.itemId.',
     ].join(' '),
     parameters: {
       items: req({
@@ -161,7 +169,8 @@ export function registerDistillTool(ctx: Context, onResult?: (batchId: string, r
                 type: 'object',
                 additionalProperties: false,
                 properties: {
-                  key: req({ type: 'string', description: 'The `key` of another item in this call.' }),
+                  key: { type: 'string', description: 'The `key` of another item in this call.' },
+                  itemId: { type: 'string', description: 'itemId of an item from an earlier document (listed under 已有事项 or returned by an earlier call). Set exactly one of key or itemId.' },
                   relation: { type: 'string', description: 'Business relation in your words, e.g. "前置任务", "同一项目".' },
                 },
               },
@@ -204,7 +213,7 @@ export function registerDistillTool(ctx: Context, onResult?: (batchId: string, r
     async execute(args) {
       const timeZone = args.timeZone ?? DEFAULT_TIME_ZONE
       if (!isValidTimeZone(timeZone)) throw new ToolArgsError([`timeZone: unknown IANA time zone "${timeZone}"`])
-      const input = { ...args, timeZone, reminderLeadMinutes: args.reminderLeadMinutes ?? DEFAULT_REMINDER_LEAD_MINUTES }
+      const input = { ...args, timeZone, reminderLeadMinutes: args.reminderLeadMinutes ?? DEFAULT_REMINDER_LEAD_MINUTES, ...(isKnownItem === undefined ? {} : { isKnownItem }) }
       const violations = validate(input)
       let capturedMs = Date.now()
       if (args.capturedAt !== undefined) {

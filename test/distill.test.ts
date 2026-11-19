@@ -61,7 +61,7 @@ describe('distill: Chinese samples', () => {
     assert.equal(out.todos[0]!.dueAt, '2025-06-06T23:59:59+08:00')
     assert.equal(out.todos[0]!.dueWeekday, '周五')
     assert.equal(out.todos[0]!.timeAssumption, '周五前包含周五,按周五23:59:59')
-    assert.deepEqual(out.todos[1]!.related, [{ id: 't1', relation: '前置任务' }])
+    assert.deepEqual(out.todos[1]!.related, [{ id: 't1', scope: 'batch', relation: '前置任务' }])
     assert.equal(out.schedules[0]!.startWeekday, '周三')
     assert.equal(out.schedules[0]!.endAt, '2025-06-11T11:30:00+08:00')
     assert.equal(out.todos[2]!.dueAt, null)

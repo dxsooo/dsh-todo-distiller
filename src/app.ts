@@ -25,6 +25,12 @@ export interface Config {
   workspaceDir: string
   /** Number of most recent runs the page lists. */
   pageSize: number
+  /** Dated open items older than this many days are left out of the 已有事项 index. */
+  indexLookbackDays: number
+  /** Maximum number of items in the 已有事项 index given to each new daily Session. */
+  indexLimit: number
+  /** Write items to macOS Reminders; false keeps them only in the item store. */
+  writeReminders: boolean
 }
 
 export const Config: Schema<Config> = Schema.object({
@@ -33,11 +39,17 @@ export const Config: Schema<Config> = Schema.object({
   maxBytes: Schema.number().min(1024).default(2 * 1024 * 1024),
   workspaceDir: Schema.string().default(''),
   pageSize: Schema.number().min(1).default(50),
+  indexLookbackDays: Schema.number().min(0).default(30),
+  indexLimit: Schema.number().min(0).default(100),
+  writeReminders: Schema.boolean().default(true),
 })
 
 const ROUTE = '/todo-distiller'
 
-export interface RunView extends RunRecord { items: ItemRecord[] }
+export interface ItemView extends Omit<ItemRecord, 'related'> {
+  related: Array<ItemRecord['related'][number] & { title: string | null, day: string | null }>
+}
+export interface RunView extends RunRecord { items: ItemView[] }
 
 function json(res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
@@ -62,6 +74,9 @@ export async function apply(ctx: Context, config: Config) {
     reminders: { list: config.list, timeoutMs: config.timeoutMs },
     workspaceDir: config.workspaceDir === '' ? defaultWorkspaceDir() : config.workspaceDir,
     workspaceTitle: '待办助理',
+    indexLookbackDays: config.indexLookbackDays,
+    indexLimit: config.indexLimit,
+    writeReminders: config.writeReminders,
   })
   ctx.effect(() => () => {
     void runner.dispose().finally(() => store.close())
@@ -79,11 +94,12 @@ export async function apply(ctx: Context, config: Config) {
       .sort((a, b) => b.createdMs - a.createdMs || b.createdAt.localeCompare(a.createdAt))
       .slice(0, config.pageSize)
     const wanted = new Set(runs.map(r => r.id))
-    const items = new Map<string, ItemRecord[]>()
-    for (const [, item] of store.table('items').entries()) {
+    const table = store.table('items')
+    const items = new Map<string, ItemView[]>()
+    for (const [, item] of table.entries()) {
       if (!wanted.has(item.runId)) continue
       const list = items.get(item.runId) ?? []
-      list.push(item)
+      list.push({ ...item, related: item.related.map(r => ({ ...r, title: table.get(r.itemId)?.title ?? null, day: table.get(r.itemId)?.day ?? null })) })
       items.set(item.runId, list)
     }
     return runs.map(r => ({ ...r, items: items.get(r.id) ?? [] }))

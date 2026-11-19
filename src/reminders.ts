@@ -84,9 +84,15 @@ export function apply(ctx: Context, config: Config) {
  * @param ctx - registering context; needs `tools` and `subprocess`.
  * @param config - Reminders list and timeout.
  * @param onResult - called with each successful write.
+ * @param storedTitle - title of a recorded item, for relation lines in reminder notes.
  * @returns the registration disposer.
  */
-export function registerRemindersTool(ctx: Context, config: Config, onResult?: (batchId: string, result: RemindersWriteResult) => void): () => void {
+export function registerRemindersTool(
+  ctx: Context,
+  config: Config,
+  onResult?: (batchId: string, result: RemindersWriteResult) => void,
+  storedTitle?: (id: string) => string | undefined,
+): () => void {
   return ctx.tools.register(defineTool({
     name: 'dsh_todo_distiller_to_reminders',
     description: [
@@ -130,7 +136,7 @@ export function registerRemindersTool(ctx: Context, config: Config, onResult?: (
       const unknown = (args.ids ?? []).filter(id => !known.has(id))
       if (unknown.length > 0) throw new ToolArgsError([`ids: unknown item id(s) ${unknown.join(', ')}`])
 
-      const writes = toReminderWrites(batch, args.ids)
+      const writes = toReminderWrites(batch, args.ids, storedTitle)
       if (writes.length === 0) return { list: config.list, created: 0, existing: 0, items: [] }
 
       const stdout = await runOsascript(ctx, buildOsascriptArgv(config.list, writes), config.timeoutMs, exec.signal)

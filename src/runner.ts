@@ -19,7 +19,7 @@ import { SYSTEM_PROMPT } from './prompt.ts'
 import { registerRemindersTool } from './reminders.ts'
 import type { Config as RemindersConfig, RemindersWriteResult } from './reminders.ts'
 import { formatIso } from './time.ts'
-import { itemsOf, STORE } from './store.ts'
+import { itemsOf, openItems, renderIndex, STORE } from './store.ts'
 import type { RunRecord } from './store.ts'
 
 const TIME_ZONE = 'Asia/Shanghai'
@@ -37,6 +37,12 @@ export interface RunnerOptions {
   /** Directory of the dedicated Workspace; created when missing. */
   workspaceDir: string
   workspaceTitle: string
+  /** Dated open items older than this are left out of the 已有事项 index. */
+  indexLookbackDays: number
+  /** Maximum number of items in the 已有事项 index. */
+  indexLimit: number
+  /** Register the Reminders tool (macOS only). */
+  writeReminders: boolean
 }
 
 /** Local calendar day `YYYY-MM-DD` in Asia/Shanghai. */
@@ -64,6 +70,8 @@ function errorText(error: unknown): string {
 export class Runner {
   private readonly handles = new Map<string, AgentHandle>()
   private readonly collectors = new WeakMap<Agent, Collector>()
+  /** Sessions created by this process that have not yet received the 已有事项 index. */
+  private readonly needsIndex = new Set<string>()
   private tail: Promise<void> = Promise.resolve()
 
   private readonly ctx: Context
@@ -122,8 +130,20 @@ export class Runner {
       const collector: Collector = { batches: [], writes: [] }
       this.collectors.set(agent, collector)
       const startSeq = agent.session.seq
+      let index = ''
+      if (this.needsIndex.delete(agent.session.id)) {
+        const sessionOf = new Map([...runs.entries()].map(([id, r]) => [id, r.sessionId]))
+        index = renderIndex(openItems(
+          [...this.store.table('items').entries()].map(([, i]) => i),
+          receivedMs,
+          this.options.indexLookbackDays,
+          this.options.indexLimit,
+          item => sessionOf.get(item.runId) === agent.session.id,
+        ))
+      }
+      const header = `文件名: ${run.name}\n接收时间: ${formatIso(receivedMs, TIME_ZONE)}`
       agent.followup(createUserMessage({
-        content: [{ type: 'text', text: `文件名: ${run.name}\n接收时间: ${formatIso(receivedMs, TIME_ZONE)}\n\n${text}` }],
+        content: [{ type: 'text', text: index === '' ? `${header}\n\n${text}` : `${index}\n\n${header}\n\n${text}` }],
         source: { kind: 'user' },
       }))
       await agent.whenIdle()
@@ -188,6 +208,7 @@ export class Runner {
       throw error
     }
     this.handles.set(day, handle)
+    this.needsIndex.add(sessionId)
     await days.put(day, { day, sessionId })
     return handle.agent
   }
@@ -206,9 +227,12 @@ export class Runner {
     }), 'todo-distiller: system prompt')
     agentCtx.effect(() => agentCtx.systemPrompt.suppressRuntimeContext(), 'todo-distiller: no runtime context')
     agentCtx.effect(() => agentCtx.tools.restrict({ allow: [] }), 'todo-distiller: hide global tools')
-    agentCtx.effect(() => registerDistillTool(agentCtx, (batchId, result) => collect()?.batches.push({ batchId, result })), 'todo-distiller: distill tool')
-    if (process.platform === 'darwin') {
-      agentCtx.effect(() => registerRemindersTool(agentCtx, this.options.reminders, (batchId, result) => collect()?.writes.push({ batchId, result })), 'todo-distiller: reminders tool')
+    const items = this.store.table('items')
+    const isKnownItem = (id: string): boolean => items.get(id) !== undefined
+    const storedTitle = (id: string): string | undefined => items.get(id)?.title
+    agentCtx.effect(() => registerDistillTool(agentCtx, (batchId, result) => collect()?.batches.push({ batchId, result }), isKnownItem), 'todo-distiller: distill tool')
+    if (process.platform === 'darwin' && this.options.writeReminders) {
+      agentCtx.effect(() => registerRemindersTool(agentCtx, this.options.reminders, (batchId, result) => collect()?.writes.push({ batchId, result }), storedTitle), 'todo-distiller: reminders tool')
     }
   }
 }

@@ -1,12 +1,14 @@
 // Pure normalization of model-proposed candidates into todos, schedules,
 // reminder suggestions, and unresolved items. No I/O, no clock access.
+import { itemIdOf } from './item-id.ts'
 import { civilOf, formatIso, parseInstant, weekdayName, zonedToInstant } from './time.ts'
 
 export type SourceType = 'im' | 'phone' | 'meeting' | 'document'
 export type Priority = 'high' | 'normal' | 'low'
 export type Status = 'open' | 'done'
 
-export interface CandidateRelation { key: string, relation?: string }
+/** A link to another item: `key` of an item in this call, or `itemId` of an item recorded earlier. Exactly one is set. */
+export interface CandidateRelation { key?: string, itemId?: string, relation?: string }
 
 /** One item the model extracted from the source text. */
 export interface Candidate {
@@ -41,13 +43,18 @@ export interface DistillInput {
   sourceRef?: string
   timeZone: string
   reminderLeadMinutes: number
+  /** Whether a recorded item id exists; when absent, `itemId` relations are ignored with a warning. */
+  isKnownItem?: (id: string) => boolean
 }
 
 export interface Source { type: SourceType, name: string | null, ref: string | null }
-export interface Relation { id: string, relation: string | null }
+/** `scope: 'batch'` — `id` is t1/s1 in this result; `'store'` — `id` is a recorded item id. */
+export interface Relation { id: string, scope: 'batch' | 'store', relation: string | null }
 
 export interface TodoOut {
   id: string
+  /** Stable id across runs and days; use it in a later `related.itemId`. */
+  itemId: string
   title: string
   description: string | null
   assignee: string | null
@@ -65,6 +72,8 @@ export interface TodoOut {
 
 export interface ScheduleOut {
   id: string
+  /** Stable id across runs and days; use it in a later `related.itemId`. */
+  itemId: string
   title: string
   description: string | null
   assignee: string | null
@@ -130,6 +139,9 @@ export function validate(input: DistillInput): string[] {
       if (seen.has(item.key)) out.push(`${at}.key "${item.key}" is not unique`)
       seen.add(item.key)
     }
+    ;(item.related ?? []).forEach((r, j) => {
+      if ((r.key === undefined) === (r.itemId === undefined)) out.push(`${at}.related[${j}] must set exactly one of key or itemId`)
+    })
     for (const field of ['dueAt', 'startAt', 'endAt'] as const) {
       const v = item[field]
       if (v !== undefined && parseInstant(v, timeZone) === null) {
@@ -170,9 +182,14 @@ export function distill(input: DistillInput, capturedMs: number): DistillOutput 
   const relationsOf = (item: Candidate, selfId: string): Relation[] => {
     const out: Relation[] = []
     for (const r of item.related ?? []) {
-      const id = ids.get(r.key)
+      if (r.itemId !== undefined) {
+        if (input.isKnownItem?.(r.itemId) === true) out.push({ id: r.itemId, scope: 'store', relation: orNull(r.relation) })
+        else warnings.push(`${selfId}: 关联的已有事项 "${r.itemId}" 不存在，已忽略`)
+        continue
+      }
+      const id = ids.get(r.key!)
       if (id === undefined) warnings.push(`${selfId}: 关联的 key "${r.key}" 不存在，已忽略`)
-      else out.push({ id, relation: orNull(r.relation) })
+      else out.push({ id, scope: 'batch', relation: orNull(r.relation) })
     }
     return out
   }
@@ -210,6 +227,7 @@ export function distill(input: DistillInput, capturedMs: number): DistillOutput 
       if (due !== null && due < capturedMs) warnings.push(`${id}: 截止时间早于捕获时间`)
       todos.push({
         id,
+        itemId: itemIdOf('todo', item.title, due === null ? null : formatIso(due, timeZone), source.name, source.ref),
         title: item.title,
         description: orNull(item.description),
         assignee: orNull(item.assignee),
@@ -244,6 +262,7 @@ export function distill(input: DistillInput, capturedMs: number): DistillOutput 
       : item.durationMinutes !== undefined ? start + item.durationMinutes * 60000 : null
     schedules.push({
       id,
+      itemId: itemIdOf('schedule', item.title, formatIso(start, timeZone), source.name, source.ref),
       title: item.title,
       description: orNull(item.description),
       assignee: orNull(item.assignee),

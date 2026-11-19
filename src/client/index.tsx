@@ -19,6 +19,7 @@ interface Item {
   assignee: string | null
   unresolved: string | null
   reminder: 'created' | 'exists' | null
+  related: Array<{ itemId: string, relation: string | null, title: string | null, day: string | null }>
 }
 interface Run {
   id: string
@@ -60,6 +61,11 @@ function ItemRow({ item }: { item: Item }) {
         {item.title}
         {item.assignee !== null && <span style={muted}>{` · ${item.assignee}`}</span>}
         {item.unresolved !== null && <div style={{ ...muted, fontSize: 12 }}>{item.unresolved}</div>}
+        {item.related.filter(r => r.title !== null).map(r => (
+          <div key={r.itemId} style={{ ...muted, fontSize: 12 }}>
+            {`↳ ${r.relation ?? '关联'}:${r.title}${r.day === null ? '' : ` · ${r.day.slice(5).replace('-', '/')}`}`}
+          </div>
+        ))}
       </span>
       <span style={{ ...muted, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
         {item.kind === 'schedule' && item.at !== null ? `${when(item.at)}${item.endAt !== null ? ` – ${when(item.endAt).slice(-5)}` : ''}` : when(item.at)}
@@ -70,7 +76,7 @@ function ItemRow({ item }: { item: Item }) {
 
 function RunCard({ run }: { run: Run }) {
   const status = run.state === 'queued' ? '排队中' : run.state === 'running' ? '处理中…' : run.state === 'error' ? '失败'
-    : run.items.length === 0 ? '没有事项' : `写入 ${run.created} 项${run.existing > 0 ? ` · 已存在 ${run.existing}` : ''}`
+    : run.items.length === 0 ? '没有事项' : run.created + run.existing === 0 ? `${run.items.length} 项` : `写入 ${run.created} 项${run.existing > 0 ? ` · 已存在 ${run.existing}` : ''}`
   return (
     <li style={{ border, borderRadius: 10, padding: '12px 14px', listStyle: 'none', display: 'grid', gap: 10 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>

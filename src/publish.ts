@@ -1,5 +1,4 @@
 // Pure mapping from a distilled batch to macOS Reminders fields.
-import { createHash } from 'node:crypto'
 import type { DistillOutput, Priority, ScheduleOut, TodoOut } from './distill.ts'
 import type { ReminderWrite } from './macos/reminders-script.ts'
 
@@ -9,10 +8,7 @@ const PRIORITY: Record<Priority, ReminderWrite['priority']> = { high: 1, normal:
 
 const label = (iso: string): string => iso.slice(0, 16).replace('T', ' ')
 
-function marker(parts: ReadonlyArray<string | null>): string {
-  const digest = createHash('sha1').update(JSON.stringify(parts)).digest('hex').slice(0, 12)
-  return `${MARKER_PREFIX}${digest}`
-}
+const marker = (itemId: string): string => `${MARKER_PREFIX}${itemId}`
 
 function sourceLine(item: TodoOut | ScheduleOut): string | null {
   const { name, ref } = item.source
@@ -28,15 +24,28 @@ function bodyOf(lines: ReadonlyArray<string | null>, mark: string): string {
  * Map the todos and schedules of a batch to reminders.
  * @param batch - distilled batch.
  * @param ids - ids to include; all items when undefined.
+ * @param storedTitle - title of a recorded item, for relations to earlier documents.
  * @returns reminders in batch order (todos, then schedules), each with a stable idempotency marker.
  */
-export function toReminderWrites(batch: DistillOutput, ids?: readonly string[]): Array<ReminderWrite & { id: string }> {
+export function toReminderWrites(
+  batch: DistillOutput,
+  ids?: readonly string[],
+  storedTitle?: (id: string) => string | undefined,
+): Array<ReminderWrite & { id: string }> {
   const wanted = (id: string): boolean => ids === undefined || ids.includes(id)
   const alertOf = (id: string): string | null => batch.suggestedReminders.find(r => r.targetId === id)?.remindAt ?? null
+  const batchTitle = new Map([...batch.todos, ...batch.schedules].map(i => [i.id, i.title]))
+  const relatedLine = (item: TodoOut | ScheduleOut): string | null => {
+    const parts = item.related.map((r) => {
+      const title = r.scope === 'batch' ? batchTitle.get(r.id) : storedTitle?.(r.id)
+      return title === undefined ? null : `${title}${r.relation === null ? '' : `(${r.relation})`}`
+    }).filter((p): p is string => p !== null)
+    return parts.length === 0 ? null : `关联: ${parts.join('、')}`
+  }
   const out: Array<ReminderWrite & { id: string }> = []
 
   for (const t of batch.todos.filter(x => wanted(x.id))) {
-    const mark = marker(['todo', t.title, t.dueAt, t.source.name, t.source.ref])
+    const mark = marker(t.itemId)
     out.push({
       id: t.id,
       marker: mark,
@@ -46,6 +55,7 @@ export function toReminderWrites(batch: DistillOutput, ids?: readonly string[]):
         t.assignee === null ? null : `负责人: ${t.assignee}`,
         t.dueText === null ? null : `原文时间: ${t.dueText}`,
         t.timeAssumption === null ? null : `时间说明: ${t.timeAssumption}`,
+        relatedLine(t),
         sourceLine(t),
         t.sourceQuote === null ? null : `原文: ${t.sourceQuote}`,
         t.notes === null ? null : `纪要: ${t.notes}`,
@@ -58,7 +68,7 @@ export function toReminderWrites(batch: DistillOutput, ids?: readonly string[]):
   }
 
   for (const s of batch.schedules.filter(x => wanted(x.id))) {
-    const mark = marker(['schedule', s.title, s.startAt, s.source.name, s.source.ref])
+    const mark = marker(s.itemId)
     out.push({
       id: s.id,
       marker: mark,
@@ -70,6 +80,7 @@ export function toReminderWrites(batch: DistillOutput, ids?: readonly string[]):
         s.assignee === null ? null : `负责人: ${s.assignee}`,
         s.startText === null ? null : `原文时间: ${s.startText}`,
         s.timeAssumption === null ? null : `时间说明: ${s.timeAssumption}`,
+        relatedLine(s),
         sourceLine(s),
         s.sourceQuote === null ? null : `原文: ${s.sourceQuote}`,
         s.notes === null ? null : `纪要: ${s.notes}`,
