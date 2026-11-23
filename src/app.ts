@@ -112,7 +112,7 @@ export async function apply(ctx: Context, config: Config) {
       try {
         const path = new URL(req.url ?? '/', 'http://local').pathname.slice(ROUTE.length).replace(/^\/+/, '')
         if (req.method === 'GET' && path === 'ping') {
-          return json(res, 200, { ok: true, platform: process.platform, model: ctx.agentDefaultModel.currentSelection() ?? null })
+          return json(res, 200, { ok: true, platform: process.platform, writeReminders: process.platform === 'darwin' && config.writeReminders, model: ctx.agentDefaultModel.currentSelection() ?? null })
         }
         if (req.method === 'GET' && path === 'runs') return json(res, 200, { runs: listRuns() })
         if (req.method === 'POST' && path === 'runs') {
@@ -121,6 +121,11 @@ export async function apply(ctx: Context, config: Config) {
           if (text.trim() === '') return json(res, 400, { error: '文档为空' })
           const run = await runner.submit(docName, text)
           return json(res, 202, { run: { ...run, items: [] } })
+        }
+        const rewrite = /^runs\/([\w-]+)\/write$/.exec(path)
+        if (req.method === 'POST' && rewrite !== null) {
+          const run = await runner.rewrite(rewrite[1]!)
+          return json(res, 200, { run: listRuns().find(r => r.id === run.id) ?? { ...run, items: [] } })
         }
         return json(res, 404, { error: 'not found' })
       } catch (error) {

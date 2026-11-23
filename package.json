@@ -1,6 +1,6 @@
 {
   "name": "@dxsooo/dsh-todo-distiller",
-  "version": "0.1.0-rc.2",
+  "version": "0.1.0-rc.3",
   "description": "DeepSeek Harness bundle: a todo assistant that distills todos and schedules from meeting notes, chats and documents and writes them to macOS Reminders.",
   "license": "MIT",
   "type": "module",

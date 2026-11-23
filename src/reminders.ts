@@ -3,12 +3,12 @@
 import type { Context } from '@deepseek-ai/cordis'
 import Schema from '@deepseek-ai/schemastery'
 import { HarnessError } from '@deepseek-ai/dsh-error'
-import type { SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
+import type { SubprocessRuntime, SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 import { defineTool, ToolArgsError } from '@deepseek-ai/dsh-tools'
 import type { ValueSchemaSpec } from '@deepseek-ai/dsh-tools'
 import { getBatch } from './batches.ts'
 import { buildOsascriptArgv, isNotAuthorized, parseWriteResults } from './macos/reminders-script.ts'
-import type { ReminderWriteResult } from './macos/reminders-script.ts'
+import type { ReminderWrite, ReminderWriteResult } from './macos/reminders-script.ts'
 import { toReminderWrites } from './publish.ts'
 
 export const name = 'dsh-todo-distiller-reminders'
@@ -41,7 +41,7 @@ export class RemindersError extends HarnessError {
 const str = { type: 'string' } as const
 const req = <const S extends ValueSchemaSpec>(s: S) => ({ ...s, required: true }) as S & { required: true }
 
-async function runOsascript(ctx: Context, argv: string[], timeoutMs: number, signal: AbortSignal): Promise<string> {
+async function runOsascript(subprocess: SubprocessRuntime, argv: string[], timeoutMs: number, signal: AbortSignal): Promise<string> {
   const timeout = AbortSignal.timeout(timeoutMs)
   const spec: SubprocessSpawnSpec = {
     argv,
@@ -50,7 +50,7 @@ async function runOsascript(ctx: Context, argv: string[], timeoutMs: number, sig
     graceMs: 2000,
     signal: AbortSignal.any([signal, timeout]),
   }
-  const handle = ctx.subprocess.spawn(spec)
+  const handle = subprocess.spawn(spec)
   const outcome = await handle.done
   if (timeout.aborted) {
     throw new RemindersError(`写入提醒事项超时(${timeoutMs} ms)。若 macOS 弹出了授权框,请点“好”后重试。`, 'REMINDERS_TIMEOUT')
@@ -74,6 +74,24 @@ export interface RemindersWriteResult {
   items: Array<{ id: string, title: string, status: 'created' | 'exists' }>
 }
 
+/**
+ * Write reminders into the configured list, skipping items whose marker already exists.
+ * @param subprocess - process service of a context that injects `subprocess`.
+ * @param config - Reminders list and timeout.
+ * @param writes - reminders to write.
+ * @param signal - cancellation.
+ * @returns per-item outcomes, in request order.
+ */
+export async function writeReminders(subprocess: SubprocessRuntime, config: Config, writes: readonly ReminderWrite[], signal: AbortSignal): Promise<ReminderWriteResult[]> {
+  if (writes.length === 0) return []
+  const stdout = await runOsascript(subprocess, buildOsascriptArgv(config.list, writes), config.timeoutMs, signal)
+  try {
+    return parseWriteResults(stdout)
+  } catch {
+    throw new RemindersError(`无法解析 osascript 输出: ${stdout.slice(0, 200)}`, 'REMINDERS_FAILED')
+  }
+}
+
 export function apply(ctx: Context, config: Config) {
   if (process.platform !== 'darwin') return
   registerRemindersTool(ctx, config)
@@ -81,10 +99,11 @@ export function apply(ctx: Context, config: Config) {
 
 /**
  * Register `dsh_todo_distiller_to_reminders` in the context's scope. macOS only.
- * @param ctx - registering context; needs `tools` and `subprocess`.
+ * @param ctx - registering context; needs `tools`. An Agent context does not inject `subprocess`, so pass `subprocess` from a context that does.
  * @param config - Reminders list and timeout.
  * @param onResult - called with each successful write.
  * @param storedTitle - title of a recorded item, for relation lines in reminder notes.
+ * @param subprocess - process service used to run osascript; defaults to `ctx.subprocess`.
  * @returns the registration disposer.
  */
 export function registerRemindersTool(
@@ -92,6 +111,7 @@ export function registerRemindersTool(
   config: Config,
   onResult?: (batchId: string, result: RemindersWriteResult) => void,
   storedTitle?: (id: string) => string | undefined,
+  subprocess: SubprocessRuntime = ctx.subprocess,
 ): () => void {
   return ctx.tools.register(defineTool({
     name: 'dsh_todo_distiller_to_reminders',
@@ -139,13 +159,7 @@ export function registerRemindersTool(
       const writes = toReminderWrites(batch, args.ids, storedTitle)
       if (writes.length === 0) return { list: config.list, created: 0, existing: 0, items: [] }
 
-      const stdout = await runOsascript(ctx, buildOsascriptArgv(config.list, writes), config.timeoutMs, exec.signal)
-      let results: ReminderWriteResult[]
-      try {
-        results = parseWriteResults(stdout)
-      } catch {
-        throw new RemindersError(`无法解析 osascript 输出: ${stdout.slice(0, 200)}`, 'REMINDERS_FAILED')
-      }
+      const results = await writeReminders(subprocess, config, writes, exec.signal)
       const statusOf = new Map(results.map(r => [r.marker, r.status]))
       const items = writes.map(w => ({ id: w.id, title: w.name, status: statusOf.get(w.marker) ?? 'exists' as const }))
       const result = {

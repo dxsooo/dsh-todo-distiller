@@ -1,6 +1,8 @@
 // Pure mapping from a distilled batch to macOS Reminders fields.
 import type { DistillOutput, Priority, ScheduleOut, TodoOut } from './distill.ts'
 import type { ReminderWrite } from './macos/reminders-script.ts'
+import type { ItemRecord } from './store.ts'
+import { civilOf, zonedToInstant, formatIso, parseInstant } from './time.ts'
 
 const MARKER_PREFIX = 'dsh-todo-distiller:'
 
@@ -92,4 +94,55 @@ export function toReminderWrites(
     })
   }
   return out
+}
+
+/**
+ * Whether a recorded item was emitted as a todo or schedule (and so has a reminder).
+ * @param item - recorded item.
+ * @returns false for an unresolved schedule that was never emitted.
+ */
+export function isWritable(item: ItemRecord): boolean {
+  return !item.id.includes(':')
+}
+
+/**
+ * Rebuild the reminder of a recorded item, without the model. The marker is the
+ * item id, so a reminder already written for it is detected and left alone.
+ * @param item - recorded writable item.
+ * @param leadMinutes - alert lead for timed items.
+ * @param storedTitle - title of another recorded item, for the relation line.
+ * @returns the reminder fields.
+ */
+export function recordToReminderWrite(item: ItemRecord, leadMinutes: number, storedTitle: (id: string) => string | undefined): ReminderWrite {
+  const TZ = 'Asia/Shanghai'
+  const mark = marker(item.id)
+  let remindAt: string | null = null
+  if (item.at !== null && item.status === 'open') {
+    const at = parseInstant(item.at, TZ)!
+    const alarm = item.kind === 'todo' && item.at.slice(11, 16) === '23:59'
+      ? zonedToInstant(civilOf(at, TZ), 9, 0, 0, TZ)
+      : at - leadMinutes * 60000
+    remindAt = formatIso(alarm, TZ)
+  }
+  const related = item.related
+    .map(r => storedTitle(r.itemId) === undefined ? null : `${storedTitle(r.itemId)}${r.relation === null ? '' : `(${r.relation})`}`)
+    .filter((p): p is string => p !== null)
+  return {
+    marker: mark,
+    name: item.title,
+    body: bodyOf([
+      item.kind === 'schedule' && item.at !== null ? `日程: ${label(item.at)}${item.endAt === null ? '' : ` 至 ${label(item.endAt)}`}` : null,
+      item.location === null ? null : `地点: ${item.location}`,
+      item.assignee === null ? null : `负责人: ${item.assignee}`,
+      item.timeText === null ? null : `原文时间: ${item.timeText}`,
+      item.timeAssumption === null ? null : `时间说明: ${item.timeAssumption}`,
+      related.length === 0 ? null : `关联: ${related.join('、')}`,
+      item.sourceName === null ? null : `来源: ${item.sourceName}`,
+      item.sourceQuote === null ? null : `原文: ${item.sourceQuote}`,
+    ], mark),
+    priority: item.priority === null ? 0 : PRIORITY[item.priority],
+    dueAt: item.at,
+    remindAt,
+    completed: item.status === 'done',
+  }
 }

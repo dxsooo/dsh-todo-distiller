@@ -16,13 +16,16 @@ import type {} from '@deepseek-ai/dsh-workspace'
 import type { DistillOutput } from './distill.ts'
 import { registerDistillTool } from './index.ts'
 import { SYSTEM_PROMPT } from './prompt.ts'
-import { registerRemindersTool } from './reminders.ts'
+import { isWritable, recordToReminderWrite } from './publish.ts'
+import { registerRemindersTool, writeReminders } from './reminders.ts'
 import type { Config as RemindersConfig, RemindersWriteResult } from './reminders.ts'
 import { formatIso } from './time.ts'
 import { itemsOf, openItems, renderIndex, STORE } from './store.ts'
 import type { RunRecord } from './store.ts'
 
 const TIME_ZONE = 'Asia/Shanghai'
+/** Alert lead for timed items rewritten from the store; matches the tool's default. */
+const REMINDER_LEAD_MINUTES = 15
 const DISTILL_TOOL = 'dsh_todo_distiller'
 
 interface Collector {
@@ -112,6 +115,40 @@ export class Runner {
       this.ctx.logger.warn('[todo-distiller] run bookkeeping failed: %s', errorText(error))
     })
     return run
+  }
+
+  /**
+   * Write a finished run's recorded items to Reminders again, without the model.
+   * Items already in Reminders are reported as existing.
+   * @param runId - run to rewrite.
+   * @returns the updated run.
+   */
+  rewrite(runId: string): Promise<RunRecord> {
+    const job = this.tail.then(() => this.rewriteNow(runId))
+    this.tail = job.then(() => undefined, () => undefined)
+    return job
+  }
+
+  private async rewriteNow(runId: string): Promise<RunRecord> {
+    const runs = this.store.table('runs')
+    const run = runs.get(runId)
+    if (run === undefined) throw Object.assign(new Error('记录不存在'), { status: 404 })
+    if (run.state === 'queued' || run.state === 'running') throw Object.assign(new Error('仍在处理中'), { status: 409 })
+    if (process.platform !== 'darwin' || !this.options.writeReminders) throw Object.assign(new Error('未启用写入提醒事项'), { status: 409 })
+    const table = this.store.table('items')
+    const items = [...table.entries()].map(([, i]) => i).filter(i => i.runId === runId && isWritable(i))
+    const writes = items.map(i => recordToReminderWrite(i, REMINDER_LEAD_MINUTES, id => table.get(id)?.title))
+    const results = await writeReminders(this.ctx.subprocess, this.options.reminders, writes, AbortSignal.timeout(this.options.reminders.timeoutMs + 5000))
+    const statusOf = new Map(results.map(r => [r.marker, r.status]))
+    for (const [i, item] of items.entries()) {
+      const status = statusOf.get(writes[i]!.marker)
+      if (status !== undefined) await table.update(item.id, current => ({ ...current, reminder: status }))
+    }
+    return await runs.update(runId, r => ({
+      ...r,
+      created: results.filter(x => x.status === 'created').length,
+      existing: results.filter(x => x.status === 'exists').length,
+    }))
   }
 
   /** Release live Agents this runner holds; their Sessions stay persisted. */
@@ -232,7 +269,8 @@ export class Runner {
     const storedTitle = (id: string): string | undefined => items.get(id)?.title
     agentCtx.effect(() => registerDistillTool(agentCtx, (batchId, result) => collect()?.batches.push({ batchId, result }), isKnownItem), 'todo-distiller: distill tool')
     if (process.platform === 'darwin' && this.options.writeReminders) {
-      agentCtx.effect(() => registerRemindersTool(agentCtx, this.options.reminders, (batchId, result) => collect()?.writes.push({ batchId, result }), storedTitle), 'todo-distiller: reminders tool')
+      // Spawn through this plugin's context: an Agent context does not inject `subprocess`.
+      agentCtx.effect(() => registerRemindersTool(agentCtx, this.options.reminders, (batchId, result) => collect()?.writes.push({ batchId, result }), storedTitle, this.ctx.subprocess), 'todo-distiller: reminders tool')
     }
   }
 }

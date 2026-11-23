@@ -37,6 +37,7 @@ const itemSchema = z.object({
   endAt: z.string().nullable(),
   assignee: z.string().nullable(),
   location: z.string().nullable(),
+  priority: z.enum(['high', 'normal', 'low']).nullable().default(null),
   status: z.enum(['open', 'done']),
   timeText: z.string().nullable(),
   timeAssumption: z.string().nullable(),
@@ -95,7 +96,7 @@ export function itemsOf(
       const id = markers.get(t.id)!
       out.set(id, {
         id, runId: run.id, day: run.day, kind: 'todo', title: t.title, at: t.dueAt, endAt: null,
-        assignee: t.assignee, location: null, status: t.status, timeText: t.dueText, timeAssumption: t.timeAssumption,
+        assignee: t.assignee, location: null, priority: t.priority, status: t.status, timeText: t.dueText, timeAssumption: t.timeAssumption,
         sourceName: t.source.name, sourceQuote: t.sourceQuote, unresolved: unresolvedOf.get(t.id) ?? null, related: linksOf(t.related),
         reminder: statusOf.get(t.id) ?? null, createdAt: now,
       })
@@ -104,7 +105,7 @@ export function itemsOf(
       const id = markers.get(s.id)!
       out.set(id, {
         id, runId: run.id, day: run.day, kind: 'schedule', title: s.title, at: s.startAt, endAt: s.endAt,
-        assignee: s.assignee, location: s.location, status: s.status, timeText: s.startText, timeAssumption: s.timeAssumption,
+        assignee: s.assignee, location: s.location, priority: s.priority, status: s.status, timeText: s.startText, timeAssumption: s.timeAssumption,
         sourceName: s.source.name, sourceQuote: s.sourceQuote, unresolved: null, related: linksOf(s.related),
         reminder: statusOf.get(s.id) ?? null, createdAt: now,
       })
@@ -113,7 +114,7 @@ export function itemsOf(
       const id = `${run.id}:${++extra}`
       out.set(id, {
         id, runId: run.id, day: run.day, kind: u.kind, title: u.title, at: null, endAt: null,
-        assignee: null, location: null, status: 'open', timeText: u.timeText, timeAssumption: null,
+        assignee: null, location: null, priority: null, status: 'open', timeText: u.timeText, timeAssumption: null,
         sourceName: result.todos[0]?.source.name ?? result.schedules[0]?.source.name ?? null, sourceQuote: null,
         unresolved: u.reason, related: [], reminder: null, createdAt: now,
       })

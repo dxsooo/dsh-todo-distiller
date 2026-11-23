@@ -74,7 +74,11 @@ function ItemRow({ item }: { item: Item }) {
   )
 }
 
-function RunCard({ run }: { run: Run }) {
+const unwritten = (run: Run): number => run.items.filter(i => !i.id.includes(':') && i.reminder === null).length
+
+function RunCard({ run, canWrite, onWrite }: { run: Run, canWrite: boolean, onWrite: (id: string) => Promise<void> }) {
+  const [writing, setWriting] = useState(false)
+  const pending = run.state === 'done' || run.state === 'error' ? unwritten(run) : 0
   const status = run.state === 'queued' ? '排队中' : run.state === 'running' ? '处理中…' : run.state === 'error' ? '失败'
     : run.items.length === 0 ? '没有事项' : run.created + run.existing === 0 ? `${run.items.length} 项` : `写入 ${run.created} 项${run.existing > 0 ? ` · 已存在 ${run.existing}` : ''}`
   return (
@@ -84,6 +88,19 @@ function RunCard({ run }: { run: Run }) {
         <span style={{ ...muted, whiteSpace: 'nowrap' }}>{status}</span>
       </div>
       {run.error !== null && <p role="alert" style={{ margin: 0 }}>{run.error}</p>}
+      {canWrite && pending > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <span style={muted}>{`${pending} 项未写入提醒事项`}</span>
+          <button
+            type="button"
+            disabled={writing}
+            onClick={() => { setWriting(true); void onWrite(run.id).finally(() => setWriting(false)) }}
+            style={{ font: 'inherit', padding: '4px 12px', borderRadius: 6, border, background: 'transparent', color: 'inherit', cursor: writing ? 'default' : 'pointer' }}
+          >
+            {writing ? '写入中…' : '写入提醒事项'}
+          </button>
+        </div>
+      )}
       {run.items.length > 0 && <div style={{ display: 'grid', gap: 6 }}>{run.items.map(item => <ItemRow key={item.id} item={item} />)}</div>}
       {run.usage !== null && (
         <small style={{ opacity: 0.45 }} title={run.summary ?? undefined}>
@@ -98,6 +115,21 @@ function Page() {
   const [runs, setRuns] = useState<Run[]>([])
   const [over, setOver] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [canWrite, setCanWrite] = useState(false)
+
+  useEffect(() => {
+    api<{ writeReminders: boolean }>('ping').then(body => setCanWrite(body.writeReminders), () => setCanWrite(false))
+  }, [])
+
+  const write = useCallback(async (id: string) => {
+    try {
+      const body = await api<{ run: Run }>(`runs/${id}/write`, { method: 'POST' })
+      setRuns(rs => rs.map(r => (r.id === id ? body.run : r)))
+      setError(null)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }, [])
 
   const refresh = useCallback(() => {
     api<{ runs: Run[] }>('runs').then(body => { setRuns(body.runs); setError(null) }, (e: unknown) => setError(String(e)))
@@ -156,7 +188,7 @@ function Page() {
         </div>
         {error !== null && <p role="alert" style={{ margin: 0 }}>{error}</p>}
         <ul style={{ margin: 0, padding: 0, display: 'grid', gap: 12 }}>
-          {runs.map(run => <RunCard key={run.id} run={run} />)}
+          {runs.map(run => <RunCard key={run.id} run={run} canWrite={canWrite} onWrite={write} />)}
         </ul>
       </div>
     </div>

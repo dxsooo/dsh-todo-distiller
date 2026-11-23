@@ -65,3 +65,17 @@ describe('osascript bridge', () => {
     assert.equal(isNotAuthorized('syntax error'), false)
   })
 })
+
+describe('recordToReminderWrite', () => {
+  it('rebuilds the same marker, times and fields from a stored item', async () => {
+    const { itemsOf } = await import('../src/store.ts')
+    const { recordToReminderWrite, isWritable } = await import('../src/publish.ts')
+    const items = itemsOf({ id: 'r1', day: '2025-06-03' }, [{ batchId: 'b', result: batch }], [], 'now')
+    const writes = toReminderWrites(batch)
+    const rebuilt = items.filter(isWritable).map(i => recordToReminderWrite(i, 15, () => undefined))
+    assert.deepEqual(rebuilt.map(w => w.marker), writes.map(w => w.marker))
+    assert.deepEqual(rebuilt.map(w => [w.dueAt, w.remindAt, w.priority]), writes.map(w => [w.dueAt, w.remindAt, w.priority]))
+    assert.ok(rebuilt[0]!.body.includes('负责人: 张伟'))
+    assert.ok(rebuilt[2]!.body.includes('日程: 2025-06-11 10:00 至 2025-06-11 11:30'))
+  })
+})
