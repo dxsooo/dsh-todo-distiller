@@ -51,7 +51,7 @@
 
 日程必须有具体开始时间才能排程和提醒。原文只有日期时,模型不填 `startAt`,事项进入 `unresolved`。这条要求写在工具描述里。曾出现模型填 09:00 占位并因此产生提醒的情况。
 
-## 10. 一个 npm 包,两个插件,一个 preset
+## 10. 一个 npm 包,两个插件,一个 preset(已被 16 取代)
 
 安装单位是 bundle(npm 包),不是插件。`@dxsooo/dsh-todo-distiller` 包含提炼插件、提醒事项插件和 `todo-distiller` preset 声明。用户装一次,在界面里选择该 preset。第二个插件通过子路径 `@dxsooo/dsh-todo-distiller/reminders` 引用(`package.json` 的 `exports`)。
 
@@ -69,7 +69,7 @@
 
 目标体验是拖入文件后自动完成。风险由两点控制:写入专用列表"DSH 助理"(整表可查看、可删除),以及幂等标记(重复执行不产生重复项)。如果以后发现误写入困扰用户,再加确认步骤(DSH 的 `tools/pre-execute` 返回 `ask`)。
 
-## 14. 流程写在 persona,不写在代码
+## 14. 流程写在 persona,不写在代码(已被 16 取代:流程写在每日会话的系统提示词 `src/prompt.ts`)
 
 "读文件 → 提炼 → 写入 → 汇报"、时间规则和 `timeAssumption` 约定都在 preset 的 persona 提示词里(`cordis.patch.yml`)。改流程不需要改代码。
 
@@ -88,3 +88,11 @@
 - 跨天关联不靠压缩或模型写的 memory,而是由代码维护事项库,下一步把未完成事项的索引注入新会话(详见 `page.md`)。
 - 事项库用 DSH 的 `ctx.storageDomain`(默认 JSON 后端,可改配置换 SQLite),不自己处理原子写和多进程。
 - 聊天模式的 preset 已移除。处理完直接写入提醒事项,是否加确认步骤按使用反馈再定。
+
+## 17. 发布:`next` 是开发版,`latest` 是正式版
+
+- 每个 rc 用 `npm publish --tag next` 发布。
+- `latest` 只在发布正式版时移动。正式版之前 `latest` 暂指 `0.1.0-rc.3`,之后的 rc 不再移动它。
+- `0.0.0-stage` 是首次试发布留下的,无标签,保留不删。
+- 无作用域的旧包 `dsh-todo-distiller` 已弃用。
+- 分支:`dev` 开发,发布时 `master` 快进到 `dev` 并打 `vX.Y.Z-rc.N` 标签。流程见 [release.md](release.md)。

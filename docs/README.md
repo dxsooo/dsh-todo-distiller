@@ -7,6 +7,7 @@
 | [decisions.md](decisions.md) | 设计决策及理由(含一次推翻重做) |
 | [dsh-plugin-notes.md](dsh-plugin-notes.md) | DSH 插件开发入门笔记:加载方式、工具 API、调试、踩过的坑 |
 | [page.md](page.md) | 专属页面:流程、每日会话、事项库、验证记录 |
-| [testing.md](testing.md) | 自动化测试、对话验证步骤、已观察到的结果、待决问题 |
+| [release.md](release.md) | 分支、版本、npm 标签和发布步骤 |
+| [testing.md](testing.md) | 自动化测试、端到端验证、安装包验证、已验证的环境 |
 
 文档只记录当前状态。改了行为就同步改对应文档。

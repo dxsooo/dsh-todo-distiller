@@ -60,25 +60,26 @@ ctx.tools.register(defineTool({
 
 ## 调试:用 `--patch` 加载
 
-不需要安装或发布插件。在 DSH 源码目录创建 `scratch-plugin/cordis.yml`:
+不需要安装或发布插件。本项目用 `pnpm build && pnpm dev:patch` 生成 `dev.patch.yml`(包名换成 `src/app.ts` 的绝对路径),然后在 DSH 源码目录运行:
+
+```sh
+pnpm dsh web --patch /绝对路径/dsh-todo-distiller/dev.patch.yml
+```
+
+patch 的格式:
 
 ```yaml
 - insert:
-  - id: todo-distiller
-    name: '/绝对路径/dsh-todo-distiller/src/index.ts'
-```
-
-然后在 DSH 源码目录运行:
-
-```sh
-pnpm dsh web --patch ./scratch-plugin/cordis.yml
+    - id: todo-distiller
+      name: '/绝对路径/dsh-todo-distiller/src/app.ts'
 ```
 
 打开 `http://127.0.0.1:3080`。
 
 - `name` 必须是**绝对路径**,可以直接指向 `.ts` 文件,不用先构建。
 - 没有"启用"按钮:写进 `cordis.yml` 的插件在启动时就加载,工具自动对模型可见。
-- 改了代码后重启这个命令,不要只刷新页面。
+- 改了代码后重启这个命令,不要只刷新页面。浏览器那一半加载的是打包后的 `dist/client.js`,改了 `src/client` 要先 `pnpm build`。
+- 参数顺序:`--patch <文件>` 要紧跟在 `web` 后面,写在 `--no-open` 前。
 - 不想自动打开浏览器,加 `--no-open`。
 - `--patch` 只加载代码,**不会安装依赖**。插件需要的包必须写进插件自己的 `package.json` 并在插件目录执行 `pnpm install`。
 
@@ -116,3 +117,33 @@ pnpm dsh web --patch ./scratch-plugin/cordis.yml
 **子进程**:`inject` 里加 `'subprocess'`,用 `ctx.subprocess.spawn({ argv, cwd, stdio, graceMs, signal })`。所有字段显式给出,无默认值;`stdout: { maxBytes }` 收集输出,`handle.done` 等待退出,`handle.collected.stdout.readFrom(0).text` 读取。类型来自 `@deepseek-ai/dsh-subprocess`(peer + dev 依赖)。
 
 **文件附件**:拖入对话框的非图片文件按原样保存,模型收到一行说明和保存路径,需要内容时用文件读取工具读取。音频、视频没有专门处理。
+
+## 补充:专属页面插件(本项目 0.1.0-rc.2 起的形态)
+
+以下用法从 DSH 源码和社区插件 `dsh-media-desk`、`dsh-minigames` 读出,**不在 DSH 的插件开发公开文档里**,升级 DSH 时要重新验证。
+
+**一个包同时有服务端和浏览器两半**:`package.json` 里 `dsh.client: { platform: 'web' }`,`exports["./client"]` 指向浏览器模块。bundle patch 里只插入包名一行。
+
+**浏览器模块格式**:`window.__ModuleLoader__.load({ id: 包名, factory(require) { ...; return module.exports } })`,`id` 必须等于包名。`require` 只能取宿主的平台模块:`react`、`react/jsx-runtime`、`react-dom`、`react-dom/client`、`@deepseek-ai/cordis`、`@deepseek-ai/dsh-client-ui-primitives` 等(完整列表见 DSH `packages/client/web/src/platform.ts` 的 `PLATFORM_MODULES`),其余打进包里。本项目用 esbuild,见 `scripts/build-client.mjs`。
+
+**侧栏入口和页面**:浏览器插件 `inject: ['slots']`,同一个 id 注册两处:`slots.inject('sidebar.panellist', () => slots.register({ name: 'sidebar.panellist', id, order, label }, Icon))` 和 `slots.inject('main', () => slots.register({ name: 'main', key: id }, Page))`。图标用 `@deepseek-ai/dsh-client-ui-primitives` 里的 `Icon*OutlineRegular`,和 DSH 其他入口风格一致。
+
+**服务端路由**:`ctx.webServer.register({ kind: 'prefix', path: '/xxx', handler })`。默认要求登录(`auth: 'required'`),未登录返回 401,不用自己鉴权。浏览器端用相对路径 `fetch('xxx/...')`。
+
+**在插件里跑一个会话**:`ctx.agents.create({ sessionId, meta: { cwd }, agentOptions: ctx.agentDefaultModel.currentSelection(), setup(agentCtx) { ... } })`,`agent.followup(createUserMessage(...))` 后 `await agent.whenIdle()`。要让会话持久化并出现在侧栏,先 `ctx.workspaceRegistry.create(dir, title)`,再 `workspace.attachSession(sessionId)`,不要 `dispose()`(dispose 会删除会话)。重启后用 `ctx.agents.resume({ resumeSessionId, setup })` 接着用。参考 DSH 的 `packages/experimental/webhook/src/session.ts`。
+
+**Agent 作用域**:`setup(agentCtx)` 里注册的工具、系统提示词、`tools.restrict({ allow: [] })`(隐藏全局工具)、`systemPrompt.suppressRuntimeContext()` 只影响这个会话。**坑**:Agent 上下文不会注入插件 `inject` 里声明的服务,在 `agentCtx` 上读 `subprocess` 会报 `cannot get property "subprocess" without inject`。要用服务,从插件自己的 `ctx` 取。
+
+**存储**:`ctx.storageDomain.open(defineDomain({ name, version, tables: { t: domainTable(zodSchema) } }))`,读同步、写落盘。默认 JSON 后端,文件在 `~/.dsh/storages/<name>.json`。`zod` 作为 peer 依赖,用宿主那份。
+
+**token 用量**:`assistant/message` 事件的 `data.usage`(`inputTokens` 不含缓存,另有 `cacheReadTokens`、`outputTokens`)。
+
+**Node 跑 `.ts` 的限制**:Node 只做类型擦除,不支持构造函数参数属性(`constructor(private x)`)等需要编译的语法,测试会报 `ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX`。
+
+**pnpm 构建脚本**:esbuild 需要跑安装脚本,pnpm 默认拦截。在 `pnpm-workspace.yaml` 里写 `allowBuilds: { esbuild: true }`。
+
+## 补充:桌面版
+
+- 插件页面里,从 npm 安装的插件详情页有“版本”一节,可以直接更新。预发布版本默认不提示,要点“显示预发布版本”。
+- 命令行方式:先完全退出桌面版,再 `dsh plugin --profile desktop add <包>@<版本或标签>`,然后重新打开。没有全局 `dsh` 时,用应用包里的 `Contents/Resources/runtime/cli/bin/dsh`。
+- macOS 的“控制提醒事项”授权对象是启动 DSH 的应用:Web 版是终端,桌面版是桌面应用。

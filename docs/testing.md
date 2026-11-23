@@ -7,8 +7,8 @@
 ```sh
 pnpm install
 pnpm typecheck     # 类型检查
-pnpm test          # node:test,9 个用例
-pnpm build         # tsc → dist/
+pnpm test          # node:test,26 个用例
+pnpm build         # tsc → dist/,esbuild → dist/client.js
 ```
 
 覆盖内容:
@@ -17,56 +17,13 @@ pnpm build         # tsc → dist/
 - `validate`:非法时间、字段用错、结束早于开始、key 重复。
 - 三个中文样例:会议纪要(含关联、提醒)、微信消息(含来源信息)、文档大纲(含没有时间的日程)。
 - 时长推算结束时间、过去时间的警告和提醒跳过。
+- 提醒事项映射:截止/提醒时间、优先级、备注、去重标记稳定;从事项库重建的提醒与原始写入一致。
+- 事项库投影、事项稳定 id(与已写入的去重标记保持一致)、跨文档关联、已有事项索引的选择与渲染。
+- `osascript` 参数构造和授权错误识别。
 
-自动化测试不覆盖"模型是否填对时间",这一点只能在对话里验证。
+自动化测试不覆盖"模型是否填对时间"和页面、会话、写入提醒事项的真实运行,这些用下面的端到端步骤验证。
 
-## 对话验证
-
-1. 在 DSH 源码目录运行 `pnpm dsh web --patch ./scratch-plugin/cordis.yml`,打开 `http://127.0.0.1:3080`。
-2. 粘贴下面的提示词。
-
-```
-请使用 dsh_todo_distiller 工具,从下面这段会议纪要中提炼待办和日程。
-这段纪要的产生时间是 2025-06-03 10:00(周二),时区 Asia/Shanghai,来源类型 meeting,来源名称"项目周会"。
-把所有时间表达自己换算成带 +08:00 偏移的 ISO 8601 时间后再传给工具,原文放进 timeText,做了假设的写进 timeAssumption。
-
-纪要:
-1. 张伟本周五前提交预算表。
-2. 预算表提交后,下周一下午2点评审,评审由李娜负责。
-3. 下周三上午10点开项目周会,在3号会议室,开一个半小时。
-4. 王磊尽快联系供应商确认报价。
-5. 6月20日前完成需求冻结。
-6. 8月1日做上线评审,具体几点还没定。
-
-工具返回后,用一张表告诉我每项的时间和你的假设。
-```
-
-预期("X 前"包含 X 当天):
-
-| 事项 | 预期 |
-|---|---|
-| 提交预算表 | `2025-06-06T23:59:59+08:00`,周五 |
-| 评审预算 | `2025-06-09T14:00:00+08:00`,周一,关联到预算表 |
-| 项目周会 | `2025-06-11T10:00:00+08:00` 到 `11:30`,周三 |
-| 联系供应商 | `todos` 中无截止时间,同时出现在 `unresolved` |
-| 需求冻结 | `2025-06-20T23:59:59+08:00`,周五 |
-| 上线评审 | 只在 `unresolved`,不在 `schedules`(见下方"第一次验证的差异") |
-
-## 已观察到的结果
-
-在 DSH Web 里调用成功,工具被识别,结构化结果返回。生成了 3 个待办和 3 个日程,周几核对字段(06-06 周五、06-09 周一、06-11 周三、06-20 周五、08-01 周五)与模型换算一致,提醒建议已返回。
-
-第一次验证的差异(提示词中的预期当时写成了"前 = 前一天"):
-
-| 事项 | 实际 | 结论 |
-|---|---|---|
-| 提交预算表、需求冻结 | 按"前"含当天,06-06、06-20 23:59:59 | 模型正确,预期写错。已改正 |
-| 评审预算 | 作为日程,默认 1 小时(原文无时长),模型已说明 | 模型判断,可接受 |
-| 上线评审 | 模型填了 09:00 占位,进入 `schedules`,并生成 08-01 08:45 提醒 | 已在工具描述中要求"只有日期时不填 `startAt`",需重新验证 |
-
-## 待重新验证
-
-修改工具描述后,用同一提示词再试一次,确认上线评审只出现在 `unresolved`。
+`src/app.ts`、`src/runner.ts`、`src/client/` 没有单元测试,它们依赖 DSH 宿主服务。
 
 ## 端到端:拖入文件写入提醒事项
 
@@ -102,3 +59,33 @@ pnpm build         # tsc → dist/
 ### 自动化测试没有覆盖的部分
 
 JXA 脚本的流程用替身对象验证过,但 `Application('Reminders')` 的真实行为(列表创建、日期、提醒时间、备注查重)只能在真机上验证。
+
+## 不写提醒事项的测试
+
+在 `dev.patch.yml` 的 `todo-distiller` 行加配置,只提炼和记录:
+
+```yaml
+- insert:
+    - id: todo-distiller
+      config:
+        writeReminders: false
+      name: '/绝对路径/dsh-todo-distiller/src/app.ts'
+```
+
+可以在页面里 `fetch('todo-distiller/runs', { method: 'POST', headers: { 'x-todo-distiller-name': encodeURIComponent('a.md') }, body })` 提交,`GET todo-distiller/runs` 读结果。
+
+## 安装包验证(发布前)
+
+```sh
+pnpm build && npm pack --pack-destination /tmp/pack
+# DSH 源码目录,临时 DSH_HOME,不碰真实 profile:
+DSH_HOME=/tmp/dsh-home-x pnpm dsh plugin --profile web add /tmp/pack/dxsooo-dsh-todo-distiller-<版本>.tgz
+DSH_HOME=/tmp/dsh-home-x pnpm dsh web --port 0 --no-open
+```
+
+确认侧栏有"待办助理"、`todo-distiller/ping` 返回 200、无 `MODULE_NOT_FOUND`,然后删除 `/tmp/dsh-home-x`。
+
+## 已验证的环境
+
+- DSH 0.2.2-rc.3 源码,Web 版,`--patch` 和安装包两种方式。
+- 桌面版:用户实测 rc.2 发现写入失败(已在 rc.3 修复);rc.3 在桌面版上的写入待用户确认。

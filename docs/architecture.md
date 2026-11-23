@@ -114,12 +114,13 @@ bundle @dxsooo/dsh-todo-distiller
 
 写入规则:
 
-- 写入专用列表,默认"DSH 助理",不存在则创建。列表名和超时(含首次授权等待)是插件配置 `list`、`timeoutMs`。
+- 写入专用列表,默认"DSH 助理",不存在则创建。列表名和超时(含首次授权等待)来自 `todo-distiller` 行的配置 `list`、`timeoutMs`(见 README)。
+- 工具注册在每日会话的 Agent 作用域里,但 `osascript` 通过插件自身的上下文启动:Agent 上下文没有注入 `subprocess` 服务。
 - 待办的 `dueAt` 写入截止时间;日程的 `startAt` 写入截止时间,`endAt`、地点写在备注里。
 - 提醒建议里对应的 `remindAt` 写入"提醒时间"(闹钟)。
 - 优先级:high→高,normal→中,low→低。`status` 为 `done` 的事项以已完成状态写入。
 - 备注包含描述、负责人、原文时间、时间说明、来源、原文和纪要,末尾是幂等标记 `dsh-todo-distiller:<12位哈希>`。
-- **幂等**:标记由类型、标题、时间、来源名、来源引用计算。写入前读取该列表所有备注,已含标记的事项不再创建,返回 `exists`。
+- **幂等**:标记是事项的稳定 `itemId`(`src/item-id.ts`,由类型、标题、时间、来源名、来源引用计算)。写入前读取该列表所有备注,已含标记的事项不再创建,返回 `exists`。
 - 批次不存在(过期或重启后清空):返回 `BATCH_NOT_FOUND`,提示重新调用 `dsh_todo_distiller`。
 - 没有自动化权限:返回 `REMINDERS_NOT_AUTHORIZED`,说明在系统设置哪里允许。
 
