@@ -5,11 +5,11 @@
 ## 流程
 
 ```
-页面 POST /todo-distiller/runs  →  记录 run(queued),立即返回 202
+页面 POST /todo-distiller/runs(文本或图片字节)  →  记录 run(queued),立即返回 202
                                   ↓ 串行队列
 今天的会话:内存中有就用;存储里有就 resume;否则在专用工作区新建
                                   ↓
-followup(文件名 + 接收时间 + 全文) → 模型调用 dsh_todo_distiller → dsh_todo_distiller_to_reminders
+followup(文件名 + 接收时间 + 全文;图片文档为说明文字 + 图片附件) → 模型调用 dsh_todo_distiller → dsh_todo_distiller_to_reminders
                                   ↓ whenIdle
 事项和用量写入事项库,run 标为 done / error
 页面 GET /todo-distiller/runs  ←  有排队或处理中的 run 时每 1.5 秒轮询
@@ -69,7 +69,7 @@ followup(文件名 + 接收时间 + 全文) → 模型调用 dsh_todo_distiller 
 
 - 页面模式下写入提醒事项:需要在你启动的 DSH 里拖入样例实测(授权对象是启动 DSH 的应用)。
 - 用户在侧栏点开今天的会话并在 DSH 重启后先于页面恢复它,那个会话没有我们的工具;此时页面会为当天新建一个会话。
-- 只支持 `.md`、`.txt`。
+- 支持 `.md`、`.txt` 和图片(`.jpg`、`.png`、`.webp`,也可直接粘贴剪贴板里的图片)。图片由模型直接读图;模型必须支持图片输入,否则该条处理失败并提示换模型。图片只做原样提炼,不做二维码解析。
 - “更新”只建立关联:旧事项仍是未完成,旧提醒仍在提醒事项里。修改或完成旧提醒是下一步。
 - 事项的完成状态不读取提醒事项;在提醒事项里勾掉的事项仍会出现在索引里。
 - 0.1.0-rc.2 的写入工具在每日会话的作用域里取 `ctx.subprocess`,Agent 作用域没有注入该服务,写入总是失败(`cannot get property "subprocess" without inject`)。rc.3 改为用插件自身的上下文启动 `osascript`。

@@ -8,6 +8,8 @@ import { IconChecklistOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitiv
 const PANEL_ID = 'todo-distiller'
 const API = 'todo-distiller/'
 const TEXT_TYPES = /\.(md|markdown|txt)$/i
+const IMAGE_TYPES: Record<string, string> = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' }
+const imageType = (name: string): string | undefined => IMAGE_TYPES[name.split('.').pop()?.toLowerCase() ?? '']
 const POLL_MS = 1500
 
 interface Item {
@@ -143,11 +145,11 @@ function Page() {
     return () => clearInterval(timer)
   }, [busy, refresh])
 
-  const start = useCallback((name: string, text: string) => {
+  const start = useCallback((name: string, body: string | Blob, type = 'text/plain; charset=utf-8') => {
     api<{ run: Run }>('runs', {
       method: 'POST',
-      headers: { 'content-type': 'text/plain; charset=utf-8', 'x-todo-distiller-name': encodeURIComponent(name) },
-      body: text,
+      headers: { 'content-type': type, 'x-todo-distiller-name': encodeURIComponent(name) },
+      body,
     }).then(body => setRuns(rs => [body.run, ...rs]), (e: unknown) => setError(e instanceof Error ? e.message : String(e)))
   }, [])
 
@@ -155,9 +157,13 @@ function Page() {
     e.preventDefault()
     setOver(false)
     const files = Array.from(e.dataTransfer.files)
-    const rejected = files.filter(f => !TEXT_TYPES.test(f.name)).map(f => f.name)
-    setError(rejected.length > 0 ? `暂只支持 .md、.txt:${rejected.join('、')}` : null)
-    for (const file of files.filter(f => TEXT_TYPES.test(f.name))) void file.text().then(text => start(file.name, text))
+    const rejected = files.filter(f => !TEXT_TYPES.test(f.name) && imageType(f.name) === undefined).map(f => f.name)
+    setError(rejected.length > 0 ? `暂只支持 .md、.txt、.jpg、.png:${rejected.join('、')}` : null)
+    for (const file of files) {
+      const type = imageType(file.name)
+      if (type !== undefined) start(file.name, file, type)
+      else if (TEXT_TYPES.test(file.name)) void file.text().then(text => start(file.name, text))
+    }
     const text = e.dataTransfer.getData('text/plain')
     if (files.length === 0 && text.trim() !== '') start('粘贴的文字', text)
   }, [start])
@@ -167,7 +173,12 @@ function Page() {
       onDragOver={(e) => { e.preventDefault(); setOver(true) }}
       onDragLeave={(e) => { if (e.currentTarget === e.target) setOver(false) }}
       onDrop={onDrop}
-      onPaste={(e) => { const text = e.clipboardData.getData('text/plain'); if (text.trim() !== '') start('粘贴的文字', text) }}
+      onPaste={(e) => {
+        const image = Array.from(e.clipboardData.files).find(f => Object.values(IMAGE_TYPES).includes(f.type))
+        if (image !== undefined) return start(`粘贴的图片.${image.type.slice(6).replace('jpeg', 'jpg')}`, image, image.type)
+        const text = e.clipboardData.getData('text/plain')
+        if (text.trim() !== '') start('粘贴的文字', text)
+      }}
       tabIndex={0}
       aria-label="待办助理:把会议记录拖到这里"
       style={{ height: '100%', overflow: 'auto', padding: '32px 40px', boxSizing: 'border-box', outline: 'none' }}
@@ -184,7 +195,7 @@ function Page() {
             transition: 'opacity 120ms, border-color 120ms',
           }}
         >
-          拖入会议记录,或粘贴文字
+          拖入会议记录或图片,或粘贴
         </div>
         {error !== null && <p role="alert" style={{ margin: 0 }}>{error}</p>}
         <ul style={{ margin: 0, padding: 0, display: 'grid', gap: 12 }}>

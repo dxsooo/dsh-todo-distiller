@@ -11,7 +11,7 @@ dsh plugin --profile web add @dxsooo/dsh-todo-distiller@next
 ```
 
 1. 启动 DSH 的 Web 界面,点左侧栏的“待办助理”。
-2. 把会议记录(`.md`、`.txt`)拖进页面,或直接粘贴文字。不需要点发送。
+2. 把会议记录(`.md`、`.txt`,或元宝笔记等图片)拖进页面,或直接粘贴文字。不需要点发送。
 3. 首次写入时 macOS 会询问是否允许控制“提醒事项”,点“好”。授权对象是启动 DSH 的应用。
 4. 事项写入提醒事项里的“DSH 助理”列表,页面上列出每份文档提炼出的事项。同一份内容重复处理不会产生重复项。
 
@@ -26,7 +26,8 @@ dsh plugin --profile web add @dxsooo/dsh-todo-distiller@next
 | `list` | `DSH 助理` | 提醒事项列表名,不存在则创建 |
 | `writeReminders` | `true` | `false` 时只提炼和记录,不写提醒事项 |
 | `timeoutMs` | `120000` | 一次写入的超时,含首次授权等待 |
-| `maxBytes` | `2097152` | 单份文档的最大字节数 |
+| `maxBytes` | `2097152` | 单份文本文档的最大字节数 |
+| `maxImageBytes` | `10485760` | 单张图片的最大字节数 |
 | `workspaceDir` | 空 | 专用工作区目录,空表示 `$DSH_HOME/todo-distiller/workspace` |
 | `pageSize` | `50` | 页面列出的最近处理记录数 |
 | `indexLookbackDays` | `30` | 已有事项索引只含不早于这么多天的事项 |

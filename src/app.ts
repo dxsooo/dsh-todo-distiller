@@ -4,6 +4,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent-default-model'
+import type { ImageMediaType } from '@deepseek-ai/dsh-attachment'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import type {} from '@deepseek-ai/dsh-storage-domain'
 import Schema from '@deepseek-ai/schemastery'
@@ -12,15 +13,17 @@ import { STORE } from './store.ts'
 import type { ItemRecord, RunRecord } from './store.ts'
 
 export const name = 'dsh-todo-distiller-app'
-export const inject = ['webServer', 'agents', 'agentDefaultModel', 'tools', 'systemPrompt', 'subprocess', 'storageDomain', 'workspaceRegistry']
+export const inject = ['webServer', 'agents', 'agentDefaultModel', 'tools', 'systemPrompt', 'subprocess', 'storageDomain', 'workspaceRegistry', 'attachments', 'llm']
 
 export interface Config {
   /** Reminders list that receives the items; created when missing. */
   list: string
   /** Deadline for one Reminders write, including the first-run macOS permission prompt. */
   timeoutMs: number
-  /** Largest accepted document body in bytes. */
+  /** Largest accepted text document body in bytes. */
   maxBytes: number
+  /** Largest accepted image in bytes. */
+  maxImageBytes: number
   /** Directory of the dedicated Workspace; empty means `$DSH_HOME/todo-distiller/workspace`. */
   workspaceDir: string
   /** Number of most recent runs the page lists. */
@@ -37,6 +40,7 @@ export const Config: Schema<Config> = Schema.object({
   list: Schema.string().default('DSH 助理'),
   timeoutMs: Schema.number().min(1000).default(120000),
   maxBytes: Schema.number().min(1024).default(2 * 1024 * 1024),
+  maxImageBytes: Schema.number().min(1024).default(10 * 1024 * 1024),
   workspaceDir: Schema.string().default(''),
   pageSize: Schema.number().min(1).default(50),
   indexLookbackDays: Schema.number().min(0).default(30),
@@ -56,7 +60,13 @@ function json(res: ServerResponse, status: number, body: unknown): void {
   res.end(JSON.stringify(body))
 }
 
-async function readBody(req: IncomingMessage, maxBytes: number): Promise<string> {
+const IMAGE_TYPES: Readonly<Record<string, ImageMediaType>> = {
+  'image/jpeg': 'image/jpeg',
+  'image/png': 'image/png',
+  'image/webp': 'image/webp',
+}
+
+async function readBody(req: IncomingMessage, maxBytes: number): Promise<Buffer> {
   const chunks: Buffer[] = []
   let size = 0
   for await (const chunk of req) {
@@ -65,7 +75,7 @@ async function readBody(req: IncomingMessage, maxBytes: number): Promise<string>
     if (size > maxBytes) throw Object.assign(new Error(`文档超过 ${maxBytes} 字节`), { status: 413 })
     chunks.push(buf)
   }
-  return Buffer.concat(chunks).toString('utf8')
+  return Buffer.concat(chunks)
 }
 
 export async function apply(ctx: Context, config: Config) {
@@ -117,9 +127,18 @@ export async function apply(ctx: Context, config: Config) {
         if (req.method === 'GET' && path === 'runs') return json(res, 200, { runs: listRuns() })
         if (req.method === 'POST' && path === 'runs') {
           const docName = decodeURIComponent(String(req.headers['x-todo-distiller-name'] ?? '未命名'))
-          const text = await readBody(req, config.maxBytes)
+          const contentType = String(req.headers['content-type'] ?? '').split(';')[0]!.trim().toLowerCase()
+          if (contentType.startsWith('image/')) {
+            const mediaType = IMAGE_TYPES[contentType]
+            if (mediaType === undefined) return json(res, 415, { error: `不支持的图片格式:${contentType}` })
+            const data = await readBody(req, config.maxImageBytes)
+            if (data.length === 0) return json(res, 400, { error: '文档为空' })
+            const run = await runner.submit(docName, { kind: 'image', data, mediaType })
+            return json(res, 202, { run: { ...run, items: [] } })
+          }
+          const text = (await readBody(req, config.maxBytes)).toString('utf8')
           if (text.trim() === '') return json(res, 400, { error: '文档为空' })
-          const run = await runner.submit(docName, text)
+          const run = await runner.submit(docName, { kind: 'text', text })
           return json(res, 202, { run: { ...run, items: [] } })
         }
         const rewrite = /^runs\/([\w-]+)\/write$/.exec(path)

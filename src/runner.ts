@@ -8,6 +8,7 @@ import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent, AgentHandle } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent-default-model'
+import type { ImageMediaType } from '@deepseek-ai/dsh-attachment'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
 import type { Domain } from '@deepseek-ai/dsh-storage-domain'
@@ -27,6 +28,11 @@ const TIME_ZONE = 'Asia/Shanghai'
 /** Alert lead for timed items rewritten from the store; matches the tool's default. */
 const REMINDER_LEAD_MINUTES = 15
 const DISTILL_TOOL = 'dsh_todo_distiller'
+
+/** A dropped document: text read in the browser, or an image sent as raw bytes. */
+export type SubmittedDocument =
+  | { kind: 'text', text: string }
+  | { kind: 'image', data: Uint8Array, mediaType: ImageMediaType }
 
 interface Collector {
   batches: Array<{ batchId: string, result: DistillOutput }>
@@ -90,10 +96,10 @@ export class Runner {
   /**
    * Queue one document.
    * @param name - file name shown to the model and the page.
-   * @param text - document body.
+   * @param document - text body, or image bytes with their media type.
    * @returns the queued run record.
    */
-  async submit(name: string, text: string): Promise<RunRecord> {
+  async submit(name: string, document: SubmittedDocument): Promise<RunRecord> {
     const now = Date.now()
     const run: RunRecord = {
       id: `r-${randomUUID().slice(0, 8)}`,
@@ -111,7 +117,7 @@ export class Runner {
       existing: 0,
     }
     await this.store.table('runs').put(run.id, run)
-    this.tail = this.tail.then(() => this.process(run.id, text, now)).catch((error: unknown) => {
+    this.tail = this.tail.then(() => this.process(run.id, document, now)).catch((error: unknown) => {
       this.ctx.logger.warn('[todo-distiller] run bookkeeping failed: %s', errorText(error))
     })
     return run
@@ -158,12 +164,13 @@ export class Runner {
     await Promise.allSettled(handles.map(h => h.dispose()))
   }
 
-  private async process(runId: string, text: string, receivedMs: number): Promise<void> {
+  private async process(runId: string, document: SubmittedDocument, receivedMs: number): Promise<void> {
     const runs = this.store.table('runs')
     const run = await runs.update(runId, r => ({ ...r, state: 'running' as const }))
     try {
       const agent = await this.agentFor(run.day)
       await runs.update(runId, r => ({ ...r, sessionId: agent.session.id }))
+      if (document.kind === 'image') await this.assertImageModel(agent)
       const collector: Collector = { batches: [], writes: [] }
       this.collectors.set(agent, collector)
       const startSeq = agent.session.seq
@@ -179,8 +186,13 @@ export class Runner {
         ))
       }
       const header = `文件名: ${run.name}\n接收时间: ${formatIso(receivedMs, TIME_ZONE)}`
+      const body = document.kind === 'text' ? document.text : '(图片文档,内容见下方图片)'
+      const text = index === '' ? `${header}\n\n${body}` : `${index}\n\n${header}\n\n${body}`
+      const attachment = document.kind === 'image'
+        ? await this.ctx.attachments.saveImage({ data: document.data, mediaType: document.mediaType, name: run.name })
+        : undefined
       agent.followup(createUserMessage({
-        content: [{ type: 'text', text: index === '' ? `${header}\n\n${text}` : `${index}\n\n${header}\n\n${text}` }],
+        content: attachment === undefined ? [{ type: 'text', text }] : [{ type: 'text', text }, { type: 'image', attachment }],
         source: { kind: 'user' },
       }))
       await agent.whenIdle()
@@ -203,6 +215,16 @@ export class Runner {
     } catch (error) {
       this.ctx.logger.warn('[todo-distiller] run %s failed: %s', runId, error instanceof Error ? error.stack ?? error.message : String(error))
       await runs.update(runId, r => ({ ...r, state: 'error' as const, error: errorText(error), finishedAt: formatIso(Date.now(), TIME_ZONE) }))
+    }
+  }
+
+  /** Refuse an image run when the Agent's model is known to be text-only; the session would only see a placeholder. */
+  private async assertImageModel(agent: Agent): Promise<void> {
+    const current = agent.model.current()
+    if (current === undefined) return
+    const model = await this.ctx.llm.resolveModelInfo(current.provider, current.model)
+    if (model.inputModalities !== undefined && !model.inputModalities.includes('image')) {
+      throw new Error(`当前模型 ${current.model} 不支持图片,请在 DSH 里换成支持图片的模型`)
     }
   }
 
