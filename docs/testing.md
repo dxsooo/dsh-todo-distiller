@@ -88,5 +88,6 @@ DSH_HOME=/tmp/dsh-home-x pnpm dsh web --port 0 --no-open
 ## 已验证的环境
 
 - DSH 0.2.2-rc.3 源码,Web 版,`--patch` 和安装包两种方式。
-- 依赖已升到 0.2.2-rc.5(桌面版当前版本):`pnpm typecheck`、`pnpm test`、`pnpm build` 通过。对照 DSH 0.2.3-alpha.2 源码,本插件用到的接口(`agents`、`workspaceRegistry`、`attachments.saveImage`、`llm.resolveModelInfo`、`systemPrompt.section`、`tools`、`storageDomain`、`subprocess`)没有破坏性变更;运行时验证仍待用户在 rc.5 桌面版上完成。
+- 依赖已升到 0.2.2-rc.5(桌面版当前版本):`pnpm typecheck`、`pnpm test`、`pnpm build` 通过。对照 DSH 0.2.3-alpha.2 源码,本插件用到的接口(`agents`、`workspaceRegistry`、`attachments.saveImage`、`llm.resolveModelInfo`、`systemPrompt.section`、`tools`、`storageDomain`、`subprocess`)没有破坏性变更;用户已在 rc.5 桌面版上测试通过(图片输入)。
+- 0.1.0-rc.4 安装包(`npm pack` 的 tgz,临时 `DSH_HOME`,0.2.3-alpha.2 源码 Web 版):安装成功,`todo-distiller/ping` 未登录 401、登录后 200,上传 `image/gif` 返回 415 提示。
 - 桌面版:用户实测 rc.2 发现写入失败(已在 rc.3 修复);rc.3 在桌面版上的写入待用户确认。
