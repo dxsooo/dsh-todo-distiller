@@ -1,6 +1,6 @@
 # DSH 插件开发入门笔记
 
-面向第一次写 DSH 插件的人。以下内容来自 DSH 源码(`deepseek-harness`,版本 `0.2.2-rc.3`)和本项目实际踩过的坑。官方参考:DSH 仓库的 `docs/user/develop/basic/tool.md` 和 `docs/cookbook/adding-a-tool.md`。
+面向第一次写 DSH 插件的人。以下内容来自 DSH 源码(`deepseek-harness`,版本 `0.2.2-rc.5`)和本项目实际踩过的坑。官方参考:DSH 仓库的 `docs/user/develop/basic/tool.md` 和 `docs/cookbook/adding-a-tool.md`。
 
 ## 插件长什么样
 
@@ -86,7 +86,7 @@ patch 的格式:
 ## 依赖
 
 - `@deepseek-ai/*` 是宿主提供的核心包:放 `peerDependencies`,同时在 `devDependencies` 写同样版本,用于 IDE 类型提示。不要放 `dependencies`,会装出第二份。
-- `@deepseek-ai/dsh-tools` 的 npm `latest` 标签指向过期版本,真正的版本线在 `next` 标签。本项目固定为 `0.2.2-rc.3`,与宿主一致。不要直接 `npm i @deepseek-ai/dsh-tools`。
+- `@deepseek-ai/dsh-tools` 的 npm `latest` 标签指向过期版本,真正的版本线在 `next` 标签。本项目固定为 `0.2.2-rc.5`,与宿主一致。不要直接 `npm i @deepseek-ai/dsh-tools`。
 - 所有 `@deepseek-ai/dsh-*` 包保持同一个版本线。
 
 ## 打包成 bundle(将来)

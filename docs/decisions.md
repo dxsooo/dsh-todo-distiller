@@ -41,7 +41,7 @@
 
 ## 7. 依赖放置
 
-`dsh-tools`、`cordis` 放 `peerDependencies`,同时在 `devDependencies` 镜像。宿主已提供,放进 `dependencies` 会产生第二份拷贝。`dsh-tools` 版本固定为 `0.2.2-rc.3`,与宿主一致。
+`dsh-tools`、`cordis` 放 `peerDependencies`,同时在 `devDependencies` 镜像。宿主已提供,放进 `dependencies` 会产生第二份拷贝。`dsh-tools` 版本固定为 `0.2.2-rc.5`,与宿主一致。
 
 ## 8. 测试工具
 

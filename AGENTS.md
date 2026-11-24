@@ -2,7 +2,7 @@
 
 `@dxsooo/dsh-todo-distiller`:DeepSeek Harness(DSH)的“待办助理”bundle。侧栏页面接收拖入的文档,在每天一个的 DSH 会话里由模型提炼待办和日程,写入 macOS 提醒事项。
 
-先读 `docs/README.md`,再按任务读 `docs/` 里的对应文档。DSH 源码在同级目录 `../deepseek-harness`(当前 0.2.2-rc.3),API 以源码为准。
+先读 `docs/README.md`,再按任务读 `docs/` 里的对应文档。DSH 源码在同级目录 `../deepseek-harness`(当前 0.2.3-alpha.2,桌面版和 npm `next` 是 0.2.2-rc.5,以后者为兼容目标),API 以源码为准。
 
 ## 原则
 

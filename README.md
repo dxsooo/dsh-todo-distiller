@@ -4,7 +4,7 @@ DeepSeek Harness 的“待办助理”。把会议记录、聊天记录里的待
 
 ## 使用
 
-要求:DeepSeek Harness `>=0.2.2-rc.3 <0.3.0`,macOS。
+要求:DeepSeek Harness `>=0.2.2-rc.5 <0.3.0`,macOS。
 
 ```sh
 dsh plugin --profile web add @dxsooo/dsh-todo-distiller@next
